@@ -1,13 +1,12 @@
 import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useConfig } from '../../hooks/useConfig'
-import { useFilters } from '../../hooks/useFilters'
 import { fetchAssetAccounts } from '../../api/accounts'
 import { fetchCategories } from '../../api/categories'
 import { fetchBudgets } from '../../api/budgets'
 import { fetchTags } from '../../api/tags'
 import { getPresetLabel } from '../../lib/date-utils'
-import type { GroupBy, OptionalFilterKey } from '../../types/filters'
+import type { FilterState, GroupBy, OptionalFilterKey } from '../../types/filters'
 import { FilterChip } from './FilterChip'
 import { FilterDropdown } from './FilterDropdown'
 import { DateRangeFilter } from './DateRangeFilter'
@@ -157,16 +156,24 @@ type ActiveChip =
   | 'tags'
   | null
 
-export function FilterBar() {
+export interface FilterBarProps {
+  filters: FilterState
+  updateFilter: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void
+  activeOptionalFilters: OptionalFilterKey[]
+  addOptionalFilter: (key: OptionalFilterKey) => void
+  removeOptionalFilter: (key: OptionalFilterKey) => void
+  availableOptionalFilters: OptionalFilterKey[]
+}
+
+export function FilterBar({
+  filters,
+  updateFilter,
+  activeOptionalFilters,
+  addOptionalFilter,
+  removeOptionalFilter,
+  availableOptionalFilters,
+}: FilterBarProps) {
   const { config } = useConfig()
-  const {
-    filters,
-    updateFilter,
-    activeOptionalFilters,
-    addOptionalFilter,
-    removeOptionalFilter,
-    availableOptionalFilters,
-  } = useFilters()
 
   const [openChip, setOpenChip] = useState<ActiveChip>(null)
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatCurrency, formatPercentage, formatDate } from './formatters'
+import { formatCurrency, formatPercentage, formatDate, formatCurrencyShort } from './formatters'
 
 function expectedCurrency(amount: number, currency: string): string {
   return new Intl.NumberFormat(undefined, {
@@ -72,5 +72,40 @@ describe('formatDate', () => {
 
   it('formats December date', () => {
     expect(formatDate('2026-12-31')).toBe('Dec 31, 2026')
+  })
+})
+
+describe('formatCurrencyShort', () => {
+  it('formats zero as symbol+0', () => {
+    const result = formatCurrencyShort(0, 'EUR')
+    expect(result).toMatch(/[€E].*0/)
+  })
+
+  it('formats amounts under 1000 without K suffix', () => {
+    const result = formatCurrencyShort(500, 'EUR')
+    expect(result).toContain('500')
+    expect(result).not.toContain('K')
+  })
+
+  it('formats 1000 as 1K', () => {
+    const result = formatCurrencyShort(1000, 'EUR')
+    expect(result).toContain('1K')
+  })
+
+  it('formats 1500 as 2K (rounded)', () => {
+    const result = formatCurrencyShort(1500, 'USD')
+    expect(result).toContain('2K')
+  })
+
+  it('formats 3000 as 3K', () => {
+    const result = formatCurrencyShort(3000, 'EUR')
+    expect(result).toContain('3K')
+  })
+
+  it('includes currency symbol', () => {
+    const eurResult = formatCurrencyShort(500, 'EUR')
+    expect(eurResult).toMatch(/[€E]/)
+    const usdResult = formatCurrencyShort(500, 'USD')
+    expect(usdResult).toMatch(/[$U]/)
   })
 })

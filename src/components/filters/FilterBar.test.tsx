@@ -3,21 +3,19 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { FilterBar } from './FilterBar'
+import { DEFAULT_FILTERS } from '../../types/filters'
 
-// Mock hooks and API calls
 const mockUpdateFilter = vi.fn()
 const mockAddOptionalFilter = vi.fn()
 const mockRemoveOptionalFilter = vi.fn()
 
-const mockUseFilters = vi.fn()
-const mockUseConfig = vi.fn()
-
-vi.mock('../../hooks/useFilters', () => ({
-  useFilters: () => mockUseFilters(),
-}))
-
 vi.mock('../../hooks/useConfig', () => ({
-  useConfig: () => mockUseConfig(),
+  useConfig: () => ({
+    config: { baseUrl: 'https://firefly.example.com', apiToken: 'token' },
+    isConfigured: true,
+    saveConfig: vi.fn(),
+    clearConfig: vi.fn(),
+  }),
 }))
 
 vi.mock('../../api/accounts', () => ({
@@ -46,25 +44,22 @@ vi.mock('../../api/tags', () => ({
   ]),
 }))
 
-import { DEFAULT_FILTERS } from '../../types/filters'
-
-const defaultFiltersState = {
+const defaultProps = {
   filters: { ...DEFAULT_FILTERS },
   updateFilter: mockUpdateFilter,
-  resetFilters: vi.fn(),
   activeOptionalFilters: [] as ('budgetIds' | 'tagIds')[],
   addOptionalFilter: mockAddOptionalFilter,
   removeOptionalFilter: mockRemoveOptionalFilter,
   availableOptionalFilters: ['budgetIds', 'tagIds'] as ('budgetIds' | 'tagIds')[],
 }
 
-function renderFilterBar() {
+function renderFilterBar(props = defaultProps) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   return render(
     <QueryClientProvider client={client}>
-      <FilterBar />
+      <FilterBar {...props} />
     </QueryClientProvider>
   )
 }
@@ -73,15 +68,6 @@ describe('FilterBar', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
-
-    mockUseConfig.mockReturnValue({
-      config: { baseUrl: 'https://firefly.example.com', apiToken: 'token' },
-      isConfigured: true,
-      saveConfig: vi.fn(),
-      clearConfig: vi.fn(),
-    })
-
-    mockUseFilters.mockReturnValue({ ...defaultFiltersState })
   })
 
   it('renders all default chips (Time range, Group by, Accounts, Categories)', () => {
@@ -148,7 +134,7 @@ describe('FilterBar', () => {
     expect(screen.getByRole('button', { name: /add filter/i })).toBeInTheDocument()
   })
 
-  it('adds an optional filter when selected from Add Filter dropdown', async () => {
+  it('calls addOptionalFilter when selected from Add Filter dropdown', async () => {
     renderFilterBar()
     await userEvent.click(screen.getByRole('button', { name: /add filter/i }))
     await userEvent.click(screen.getByText('Budgets'))
@@ -156,22 +142,20 @@ describe('FilterBar', () => {
   })
 
   it('shows budget chip when budgetIds is in activeOptionalFilters', () => {
-    mockUseFilters.mockReturnValue({
-      ...defaultFiltersState,
+    renderFilterBar({
+      ...defaultProps,
       activeOptionalFilters: ['budgetIds'],
       availableOptionalFilters: ['tagIds'],
     })
-    renderFilterBar()
     expect(screen.getByText('Budgets:')).toBeInTheDocument()
   })
 
-  it('removes optional filter chip when X is clicked', async () => {
-    mockUseFilters.mockReturnValue({
-      ...defaultFiltersState,
+  it('calls removeOptionalFilter when X is clicked on optional chip', async () => {
+    renderFilterBar({
+      ...defaultProps,
       activeOptionalFilters: ['budgetIds'],
       availableOptionalFilters: ['tagIds'],
     })
-    renderFilterBar()
     await userEvent.click(screen.getByRole('button', { name: /remove budgets/i }))
     expect(mockRemoveOptionalFilter).toHaveBeenCalledWith('budgetIds')
   })
