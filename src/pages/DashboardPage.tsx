@@ -21,7 +21,6 @@ export function DashboardPage() {
           subtitle="Analyze your spending trends and budget variance."
         />
         <FilterBar />
-        {/* Chart and Table coming in phases 3 and 4 */}
       </main>
     </div>
   )

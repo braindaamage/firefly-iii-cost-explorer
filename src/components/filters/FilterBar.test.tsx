@@ -140,7 +140,7 @@ describe('FilterBar', () => {
     await userEvent.click(screen.getByRole('button', { name: /accounts/i }))
     await waitFor(() => screen.getByLabelText('Checking'))
     await userEvent.click(screen.getByLabelText('Checking'))
-    expect(mockUpdateFilter).toHaveBeenCalledWith('accountIds', [1])
+    expect(mockUpdateFilter).toHaveBeenCalledWith('accountIds', ['1'])
   })
 
   it('shows Add Filter button when optional filters are available', () => {

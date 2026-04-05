@@ -32,10 +32,10 @@ describe('AddFilterButton', () => {
     expect(onAdd).toHaveBeenCalledWith('budgetIds')
   })
 
-  it('shows only remaining available filters', () => {
-    render(
-      <AddFilterButton availableFilters={['tagIds']} onAdd={vi.fn()} />
-    )
-    userEvent.click(screen.getByRole('button', { name: /add filter/i }))
+  it('shows only remaining available filters', async () => {
+    render(<AddFilterButton availableFilters={['tagIds']} onAdd={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /add filter/i }))
+    expect(screen.getByText('Tags')).toBeInTheDocument()
+    expect(screen.queryByText('Budgets')).not.toBeInTheDocument()
   })
 })

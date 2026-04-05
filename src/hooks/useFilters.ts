@@ -12,11 +12,18 @@ function readFilters(): FilterState {
   return getStorageItem<FilterState>(FILTERS_KEY) ?? DEFAULT_FILTERS
 }
 
+function deriveActiveOptionalFilters(filters: FilterState): OptionalFilterKey[] {
+  const active: OptionalFilterKey[] = []
+  if (filters.budgetIds.length > 0) active.push('budgetIds')
+  if (filters.tagIds.length > 0) active.push('tagIds')
+  return active
+}
+
 export function useFilters() {
   const [filters, setFilters] = useState<FilterState>(readFilters)
   const [activeOptionalFilters, setActiveOptionalFilters] = useState<
     OptionalFilterKey[]
-  >([])
+  >(() => deriveActiveOptionalFilters(readFilters()))
 
   function updateFilter<K extends keyof FilterState>(
     key: K,

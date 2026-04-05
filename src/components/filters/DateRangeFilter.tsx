@@ -44,6 +44,7 @@ export function DateRangeFilter({
   )
   const [startDate, setStartDate] = useState(customRange?.start ?? '')
   const [endDate, setEndDate] = useState(customRange?.end ?? '')
+  const [dateError, setDateError] = useState<string | null>(null)
 
   function handlePresetClick(preset: TimeRangePreset) {
     if (preset === 'custom') {
@@ -56,6 +57,11 @@ export function DateRangeFilter({
 
   function handleApplyCustom() {
     if (startDate && endDate) {
+      if (startDate > endDate) {
+        setDateError('End date must be after start date')
+        return
+      }
+      setDateError(null)
       onSelectCustomRange({ start: startDate, end: endDate })
       onClose()
     }
@@ -138,6 +144,14 @@ export function DateRangeFilter({
               colorScheme: 'dark',
             }}
           />
+          {dateError && (
+            <span
+              role="alert"
+              style={{ color: '#f28b82', fontSize: '12px' }}
+            >
+              {dateError}
+            </span>
+          )}
           <button
             type="button"
             onClick={handleApplyCustom}

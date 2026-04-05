@@ -20,10 +20,6 @@ afterEach(() => {
 })
 
 describe('getDateRangeFromPreset', () => {
-  it('returns null for custom', () => {
-    expect(getDateRangeFromPreset('custom')).toBeNull()
-  })
-
   it('last_7_days returns last 6 days + today', () => {
     const range = getDateRangeFromPreset('last_7_days')
     expect(range).toEqual({ start: '2026-03-31', end: '2026-04-06' })

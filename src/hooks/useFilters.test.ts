@@ -38,10 +38,10 @@ describe('useFilters', () => {
     const { result } = renderHook(() => useFilters())
 
     act(() => {
-      result.current.updateFilter('accountIds', [1, 2, 3])
+      result.current.updateFilter('accountIds', ['1', '2', '3'])
     })
 
-    expect(result.current.filters.accountIds).toEqual([1, 2, 3])
+    expect(result.current.filters.accountIds).toEqual(['1', '2', '3'])
   })
 
   it('activeOptionalFilters starts empty', () => {
@@ -81,7 +81,7 @@ describe('useFilters', () => {
 
     act(() => {
       result.current.addOptionalFilter('tagIds')
-      result.current.updateFilter('tagIds', [1, 2])
+      result.current.updateFilter('tagIds', ['1', '2'])
     })
 
     act(() => {
@@ -90,6 +90,22 @@ describe('useFilters', () => {
 
     expect(result.current.activeOptionalFilters).not.toContain('tagIds')
     expect(result.current.filters.tagIds).toEqual([])
+  })
+
+  it('derives activeOptionalFilters from persisted non-empty budgetIds on reload', () => {
+    const saved = { ...DEFAULT_FILTERS, budgetIds: ['1', '2'] }
+    localStorage.setItem('ff3_filters', JSON.stringify(saved))
+
+    const { result } = renderHook(() => useFilters())
+    expect(result.current.activeOptionalFilters).toContain('budgetIds')
+  })
+
+  it('derives activeOptionalFilters from persisted non-empty tagIds on reload', () => {
+    const saved = { ...DEFAULT_FILTERS, tagIds: ['5'] }
+    localStorage.setItem('ff3_filters', JSON.stringify(saved))
+
+    const { result } = renderHook(() => useFilters())
+    expect(result.current.activeOptionalFilters).toContain('tagIds')
   })
 
   it('resetFilters resets to DEFAULT_FILTERS and clears optional filters', () => {

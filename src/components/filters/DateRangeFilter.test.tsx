@@ -74,4 +74,24 @@ describe('DateRangeFilter', () => {
     })
     expect(onClose).toHaveBeenCalled()
   })
+
+  it('shows error and does not call onSelectCustomRange when end date is before start date', async () => {
+    const onSelectCustomRange = vi.fn()
+    render(
+      <DateRangeFilter
+        {...defaultProps}
+        currentPreset="custom"
+        onSelectCustomRange={onSelectCustomRange}
+      />
+    )
+
+    await userEvent.type(screen.getByLabelText('Start date'), '2026-03-31')
+    await userEvent.type(screen.getByLabelText('End date'), '2026-01-01')
+    await userEvent.click(screen.getByRole('button', { name: /apply/i }))
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'End date must be after start date'
+    )
+    expect(onSelectCustomRange).not.toHaveBeenCalled()
+  })
 })

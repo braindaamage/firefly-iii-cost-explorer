@@ -13,9 +13,7 @@ function fmt(date: Date): string {
   return format(date, 'yyyy-MM-dd')
 }
 
-export function getDateRangeFromPreset(preset: TimeRangePreset): DateRange | null {
-  if (preset === 'custom') return null
-
+export function getDateRangeFromPreset(preset: Exclude<TimeRangePreset, 'custom'>): DateRange {
   const today = new Date()
 
   switch (preset) {
@@ -59,14 +57,11 @@ export function getPresetLabel(preset: TimeRangePreset): string {
 }
 
 export function getEffectiveDateRange(filters: FilterState): DateRange {
-  if (filters.timeRange === 'custom' && filters.customDateRange) {
-    return filters.customDateRange
-  }
-  const range = getDateRangeFromPreset(filters.timeRange)
-  // Fallback to last 30 days if somehow null
-  if (!range) {
+  if (filters.timeRange === 'custom') {
+    if (filters.customDateRange) return filters.customDateRange
+    // custom selected but no range yet — fall back to last 30 days
     const today = new Date()
     return { start: fmt(subDays(today, 29)), end: fmt(today) }
   }
-  return range
+  return getDateRangeFromPreset(filters.timeRange)
 }

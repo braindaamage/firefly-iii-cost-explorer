@@ -1,7 +1,7 @@
 import { format, parseISO } from 'date-fns'
 
 export function formatCurrency(amount: number, currencyCode: string): string {
-  return new Intl.NumberFormat('en-US', {
+  return new Intl.NumberFormat(undefined, {
     style: 'currency',
     currency: currencyCode,
     minimumFractionDigits: 2,

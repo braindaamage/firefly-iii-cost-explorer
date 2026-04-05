@@ -36,8 +36,8 @@ const OPTIONAL_FILTER_LABELS: Record<OptionalFilterKey, string> = {
 
 interface MultiSelectDropdownProps {
   items: { id: string; name: string }[]
-  selectedIds: number[]
-  onChange: (ids: number[]) => void
+  selectedIds: string[]
+  onChange: (ids: string[]) => void
   loading?: boolean
 }
 
@@ -49,7 +49,7 @@ function MultiSelectDropdown({
 }: MultiSelectDropdownProps) {
   const allSelected = items.length > 0 && selectedIds.length === items.length
 
-  function toggleItem(id: number) {
+  function toggleItem(id: string) {
     if (selectedIds.includes(id)) {
       onChange(selectedIds.filter((x) => x !== id))
     } else {
@@ -61,7 +61,7 @@ function MultiSelectDropdown({
     if (allSelected) {
       onChange([])
     } else {
-      onChange(items.map((i) => Number(i.id)))
+      onChange(items.map((i) => i.id))
     }
   }
 
@@ -108,14 +108,13 @@ function MultiSelectDropdown({
         {allSelected ? 'Deselect all' : 'Select all'}
       </div>
       {items.map((item) => {
-        const id = Number(item.id)
-        const checked = selectedIds.includes(id)
+        const checked = selectedIds.includes(item.id)
         return (
           <div
             key={item.id}
             role="option"
             aria-selected={checked}
-            onClick={() => toggleItem(id)}
+            onClick={() => toggleItem(item.id)}
             style={{
               padding: '8px 16px',
               cursor: 'pointer',
@@ -136,7 +135,7 @@ function MultiSelectDropdown({
             <input
               type="checkbox"
               checked={checked}
-              onChange={() => toggleItem(id)}
+              onChange={() => toggleItem(item.id)}
               aria-label={item.name}
               onClick={(e) => e.stopPropagation()}
               style={{ accentColor: '#8ab4f8' }}
@@ -183,28 +182,28 @@ export function FilterBar() {
   const enabled = !!config
 
   const { data: accounts, isLoading: accountsLoading } = useQuery({
-    queryKey: ['accounts', baseUrl],
+    queryKey: ['accounts', baseUrl, token],
     queryFn: () => fetchAssetAccounts(baseUrl, token),
     enabled,
     staleTime: 5 * 60 * 1000,
   })
 
   const { data: categories, isLoading: categoriesLoading } = useQuery({
-    queryKey: ['categories', baseUrl],
+    queryKey: ['categories', baseUrl, token],
     queryFn: () => fetchCategories(baseUrl, token),
     enabled,
     staleTime: 5 * 60 * 1000,
   })
 
   const { data: budgets, isLoading: budgetsLoading } = useQuery({
-    queryKey: ['budgets', baseUrl],
+    queryKey: ['budgets', baseUrl, token],
     queryFn: () => fetchBudgets(baseUrl, token),
     enabled,
     staleTime: 5 * 60 * 1000,
   })
 
   const { data: tags, isLoading: tagsLoading } = useQuery({
-    queryKey: ['tags', baseUrl],
+    queryKey: ['tags', baseUrl, token],
     queryFn: () => fetchTags(baseUrl, token),
     enabled,
     staleTime: 5 * 60 * 1000,
@@ -218,7 +217,7 @@ export function FilterBar() {
     setOpenChip(null)
   }
 
-  function getSelectionLabel(ids: number[], total: number): string {
+  function getSelectionLabel(ids: string[], total: number): string {
     if (ids.length === 0) return 'All'
     if (ids.length === total) return 'All'
     return `${ids.length} selected`

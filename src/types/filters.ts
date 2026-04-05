@@ -24,10 +24,10 @@ export interface FilterState {
   timeRange: TimeRangePreset
   customDateRange: DateRange | null // solo usado cuando timeRange === 'custom'
   groupBy: GroupBy
-  accountIds: number[] // vacio = All
-  categoryIds: number[] // vacio = All
-  budgetIds: number[] // vacio = All
-  tagIds: number[] // vacio = All
+  accountIds: string[] // vacio = All
+  categoryIds: string[] // vacio = All
+  budgetIds: string[] // vacio = All
+  tagIds: string[] // vacio = All
 }
 
 export const DEFAULT_FILTERS: FilterState = {
