@@ -77,32 +77,7 @@ export function ChartHeader({ showCumulative, onToggleCumulative }: ChartHeaderP
           </span>
         </label>
 
-        {/* Three-dot menu button */}
-        <button
-          type="button"
-          aria-label="Chart menu"
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            color: '#9aa0a6',
-            padding: '4px',
-            display: 'flex',
-            alignItems: 'center',
-          }}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            aria-hidden="true"
-          >
-            <circle cx="12" cy="5" r="2" />
-            <circle cx="12" cy="12" r="2" />
-            <circle cx="12" cy="19" r="2" />
-          </svg>
-        </button>
+
       </div>
     </div>
   )

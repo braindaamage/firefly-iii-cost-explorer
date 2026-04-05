@@ -105,9 +105,8 @@ describe('useDashboardData', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false), {
       timeout: 3000,
     })
-    // error may or may not propagate depending on which period fails first
-    // just verify it doesn't throw
-    expect(result.current).toBeDefined()
+    expect(result.current.error).not.toBeNull()
+    expect(result.current.isLoading).toBe(false)
   })
 
   it('uses budget fetch function when groupBy is budget', async () => {

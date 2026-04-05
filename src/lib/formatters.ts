@@ -1,6 +1,7 @@
 import { format, parseISO } from 'date-fns'
 
 export function formatCurrency(amount: number, currencyCode: string): string {
+  if (!currencyCode) return amount.toFixed(2)
   return new Intl.NumberFormat(undefined, {
     style: 'currency',
     currency: currencyCode,
@@ -18,6 +19,7 @@ export function formatDate(dateStr: string): string {
 }
 
 export function formatCurrencyShort(amount: number, currencyCode: string): string {
+  if (!currencyCode) return amount.toFixed(0)
   const symbol =
     new Intl.NumberFormat(undefined, { style: 'currency', currency: currencyCode })
       .formatToParts(0)

@@ -202,13 +202,13 @@ export function SpendingTrendChart({
             }
             cursor={{ fill: 'rgba(255,255,255,0.04)' }}
           />
-          {series.map((s) => (
+          {series.map((s, i) => (
             <Bar
               key={s.id}
               dataKey={s.name}
               stackId="a"
               fill={s.color}
-              radius={series.indexOf(s) === series.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]}
+              radius={i === series.length - 1 ? [2, 2, 0, 0] : [0, 0, 0, 0]}
             />
           ))}
         </BarChart>

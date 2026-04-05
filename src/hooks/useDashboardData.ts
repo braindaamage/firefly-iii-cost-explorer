@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useQueries } from '@tanstack/react-query'
 import { useConfig } from './useConfig'
 import { getEffectiveDateRange } from '../lib/date-utils'
@@ -64,7 +65,7 @@ function processResults(
 ): { chartData: ChartDataPoint[]; series: SeriesData[]; currencyCode: string } {
   // Collect all unique series names in insertion order
   const seriesMap = new Map<string, { id: string; name: string }>()
-  let currencyCode = 'EUR'
+  let currencyCode = ''
 
   results.forEach((entries) => {
     entries?.forEach((entry) => {
@@ -140,8 +141,10 @@ export function useDashboardData(filters: FilterState): DashboardData {
         : 'Failed to load data')
     : null
 
-  const allData = queryResults.map((r) => r.data)
-  const { chartData, series, currencyCode } = processResults(periods, allData)
+  const { chartData, series, currencyCode } = useMemo(() => {
+    const allData = queryResults.map((r) => r.data)
+    return processResults(periods, allData)
+  }, [queryResults, periods])
 
   return { chartData, series, currencyCode, isLoading, error, periods }
 }
