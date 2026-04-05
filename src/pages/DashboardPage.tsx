@@ -1,4 +1,6 @@
 import { Header } from '../components/layout/Header'
+import { PageHeader } from '../components/layout/PageHeader'
+import { FilterBar } from '../components/filters/FilterBar'
 
 export function DashboardPage() {
   return (
@@ -7,15 +9,19 @@ export function DashboardPage() {
       <main
         style={{
           flex: 1,
+          padding: '24px',
           display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: '#9aa0a6',
-          fontFamily: "'Roboto', sans-serif",
-          fontSize: '16px',
+          flexDirection: 'column',
+          gap: '24px',
+          backgroundColor: '#121212',
         }}
       >
-        Dashboard coming in Phase 2
+        <PageHeader
+          title="Cost Explorer"
+          subtitle="Analyze your spending trends and budget variance."
+        />
+        <FilterBar />
+        {/* Chart and Table coming in phases 3 and 4 */}
       </main>
     </div>
   )
