@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { MemoryRouter } from 'react-router-dom'
+import { AppRoutes } from './App'
 import { useConfig } from './hooks/useConfig'
-import { ConfigPage } from './pages/ConfigPage'
-import { DashboardPage } from './pages/DashboardPage'
 
 vi.mock('./hooks/useConfig')
 vi.mock('./pages/ConfigPage', () => ({
@@ -15,27 +14,6 @@ vi.mock('./pages/DashboardPage', () => ({
 }))
 
 const mockUseConfig = vi.mocked(useConfig)
-
-function AppRoutes() {
-  const { isConfigured } = useConfig()
-  return (
-    <Routes>
-      <Route
-        path="/"
-        element={
-          isConfigured ? (
-            <Navigate to="/dashboard" replace />
-          ) : (
-            <Navigate to="/config" replace />
-          )
-        }
-      />
-      <Route path="/config" element={<ConfigPage />} />
-      <Route path="/dashboard" element={<DashboardPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  )
-}
 
 function renderApp(initialPath: string, isConfigured: boolean) {
   mockUseConfig.mockReturnValue({

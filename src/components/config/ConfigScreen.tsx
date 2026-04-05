@@ -41,6 +41,7 @@ export function ConfigScreen() {
   })
 
   const hasInput = baseUrl.trim() !== '' && apiToken.trim() !== ''
+  const isTesting = connectionState.status === 'testing'
   const canSave = connectionState.status === 'success'
 
   function cleanUrl(url: string): string {
@@ -50,6 +51,18 @@ export function ConfigScreen() {
   async function handleTestConnection() {
     const cleanedUrl = cleanUrl(baseUrl)
     setBaseUrl(cleanedUrl)
+
+    try {
+      new URL(cleanedUrl)
+    } catch {
+      setConnectionState({
+        status: 'error',
+        message:
+          'Invalid URL format. Please enter a valid URL (e.g., https://firefly.example.com).',
+      })
+      return
+    }
+
     setConnectionState({ status: 'testing' })
 
     const client = createApiClient(cleanedUrl, apiToken.trim())
@@ -132,10 +145,7 @@ export function ConfigScreen() {
               setConnectionState({ status: 'idle' })
             }}
             placeholder="https://firefly.example.com"
-            style={{
-              ...inputStyle,
-              '::placeholder': { color: '#5f6368' },
-            } as React.CSSProperties}
+            style={inputStyle}
             aria-label="Base URL"
           />
         </div>
@@ -196,7 +206,7 @@ export function ConfigScreen() {
         <button
           type="button"
           onClick={handleTestConnection}
-          disabled={!hasInput}
+          disabled={!hasInput || isTesting}
           style={{
             background: 'transparent',
             border: '1px solid #3c4043',
@@ -205,8 +215,8 @@ export function ConfigScreen() {
             color: '#8ab4f8',
             fontSize: '14px',
             fontFamily: "'Roboto', sans-serif",
-            cursor: hasInput ? 'pointer' : 'not-allowed',
-            opacity: hasInput ? 1 : 0.5,
+            cursor: hasInput && !isTesting ? 'pointer' : 'not-allowed',
+            opacity: hasInput && !isTesting ? 1 : 0.5,
             alignSelf: 'center',
           }}
         >

@@ -216,4 +216,60 @@ describe('ConfigScreen', () => {
       'https://firefly.example.com'
     )
   })
+
+  it('shows error when URL format is invalid without making a network request', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    renderConfigScreen()
+    const user = userEvent.setup()
+
+    await user.type(screen.getByLabelText('Base URL'), 'not-a-url')
+    await user.type(screen.getByLabelText('API Token'), 'mytoken')
+    await user.click(screen.getByRole('button', { name: /test connection/i }))
+
+    expect(
+      screen.getByText(
+        'Invalid URL format. Please enter a valid URL (e.g., https://firefly.example.com).'
+      )
+    ).toBeInTheDocument()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('toggles API token visibility when eye button is clicked', async () => {
+    renderConfigScreen()
+    const user = userEvent.setup()
+
+    const tokenInput = screen.getByLabelText('API Token')
+    expect(tokenInput).toHaveAttribute('type', 'password')
+
+    await user.click(screen.getByRole('button', { name: /show token/i }))
+    expect(tokenInput).toHaveAttribute('type', 'text')
+
+    await user.click(screen.getByRole('button', { name: /hide token/i }))
+    expect(tokenInput).toHaveAttribute('type', 'password')
+  })
+
+  it('resets connection state to idle when inputs are modified after a successful test', async () => {
+    mockFetchAbout('6.1.21')
+    renderConfigScreen()
+    const user = userEvent.setup()
+
+    await user.type(screen.getByLabelText('Base URL'), 'https://firefly.example.com')
+    await user.type(screen.getByLabelText('API Token'), 'mytoken')
+    await user.click(screen.getByRole('button', { name: /test connection/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Connected to Firefly III v6.1.21')).toBeInTheDocument()
+    })
+
+    expect(screen.getByRole('button', { name: /save & continue/i })).not.toBeDisabled()
+
+    // Modify URL input
+    await user.type(screen.getByLabelText('Base URL'), '/extra')
+
+    // Connection status reset to idle → success message gone, save disabled
+    expect(screen.queryByText('Connected to Firefly III v6.1.21')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /save & continue/i })).toBeDisabled()
+  })
 })

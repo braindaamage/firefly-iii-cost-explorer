@@ -6,7 +6,7 @@ import { DashboardPage } from './pages/DashboardPage'
 
 const queryClient = new QueryClient()
 
-function AppRoutes() {
+export function AppRoutes() {
   const { isConfigured } = useConfig()
 
   return (

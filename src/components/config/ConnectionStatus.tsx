@@ -30,7 +30,6 @@ export function ConnectionStatus({ state }: ConnectionStatusProps) {
           style={{ animation: 'spin 1s linear infinite' }}
           aria-hidden="true"
         >
-          <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
           <circle
             cx="12"
             cy="12"
