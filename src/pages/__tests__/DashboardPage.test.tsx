@@ -38,6 +38,22 @@ vi.mock('../../api/insights', () => ({
   fetchInsightExpenseByAssetAccount: vi.fn().mockResolvedValue([]),
 }))
 
+vi.mock('../../api/transactions', () => ({
+  fetchTransactionsByGroup: vi.fn().mockResolvedValue({
+    transactions: [],
+    pagination: { total: 0, count: 0, perPage: 50, currentPage: 1, totalPages: 1 },
+  }),
+}))
+
+vi.mock('../../lib/csv-export', () => ({
+  exportBreakdownCSV: vi.fn(),
+  exportTransactionsCSV: vi.fn(),
+}))
+
+vi.mock('../../lib/chart-export', () => ({
+  exportChartAsPNG: vi.fn(),
+}))
+
 function renderPage() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -75,5 +91,10 @@ describe('DashboardPage', () => {
   it('renders the Export CSV button', () => {
     renderPage()
     expect(screen.getByRole('button', { name: /export csv/i })).toBeInTheDocument()
+  })
+
+  it('renders the chart menu button', () => {
+    renderPage()
+    expect(screen.getByRole('button', { name: /chart menu/i })).toBeInTheDocument()
   })
 })

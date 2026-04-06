@@ -30,6 +30,7 @@ interface BreakdownTableProps {
   isLoading: boolean
   filters: FilterState
   onRowClick: (row: BreakdownRow) => void
+  onExportCSV: () => void
 }
 
 function VarianceCell({ value, currencyCode }: { value: number | null; currencyCode: string }) {
@@ -100,6 +101,7 @@ export function BreakdownTable({
   isLoading,
   filters,
   onRowClick,
+  onExportCSV,
 }: BreakdownTableProps) {
   const groupBy = filters.groupBy
 
@@ -188,16 +190,14 @@ export function BreakdownTable({
         </span>
         <button
           type="button"
-          disabled
-          title="Coming in a future update"
+          onClick={onExportCSV}
           style={{
             background: 'none',
             border: 'none',
-            cursor: 'not-allowed',
+            cursor: 'pointer',
             fontFamily: "'Roboto', sans-serif",
             fontSize: '13px',
             color: '#8ab4f8',
-            opacity: 0.5,
             padding: '4px 8px',
           }}
         >
