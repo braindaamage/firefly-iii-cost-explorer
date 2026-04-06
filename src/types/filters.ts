@@ -42,3 +42,5 @@ export const DEFAULT_FILTERS: FilterState = {
 
 // Filtros opcionales (se muestran via "Add Filter")
 export type OptionalFilterKey = 'budgetIds' | 'tagIds'
+
+export type GranularityOption = 'auto' | 'day' | 'week' | 'month'

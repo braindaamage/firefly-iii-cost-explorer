@@ -1,10 +1,10 @@
 import { useState, useMemo, Fragment } from 'react'
 import { SortableHeader } from './SortableHeader'
-import { formatCurrency, formatPercentage } from '../../lib/formatters'
+import { formatCurrency } from '../../lib/formatters'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import type { SortDirection } from './SortableHeader'
 import type { BreakdownRow } from '../../types/breakdown'
-import type { FilterState, GroupBy } from '../../types/filters'
+import type { GroupBy } from '../../types/filters'
 
 const GROUP_TITLES: Record<GroupBy, string> = {
   category: 'Category Breakdown',
@@ -22,57 +22,17 @@ const GROUP_COLUMN_LABEL: Record<GroupBy, string> = {
   asset_account: 'Asset Account',
 }
 
-type SortKey = 'name' | 'actualCost' | 'budgeted' | 'variance' | 'percentChange'
+type SortKey = 'name' | 'total' | string  // string covers period labels
 
 interface BreakdownTableProps {
   rows: BreakdownRow[]
   totals: BreakdownRow
+  periods: string[]
   currencyCode: string
   isLoading: boolean
-  filters: FilterState
+  groupBy: GroupBy
   onRowClick: (row: BreakdownRow) => void
   onExportCSV: () => void
-}
-
-function VarianceCell({ value, currencyCode }: { value: number | null; currencyCode: string }) {
-  if (value === null) return <span style={{ color: '#9aa0a6' }}>-</span>
-  if (value === 0) return <span style={{ color: '#9aa0a6' }}>{formatCurrency(0, currencyCode)}</span>
-  const isOverBudget = value > 0
-  const color = isOverBudget ? '#f28b82' : '#81c995'
-  const prefix = isOverBudget ? '+' : '-'
-  return (
-    <span style={{ color }}>
-      {prefix}{formatCurrency(Math.abs(value), currencyCode)}
-    </span>
-  )
-}
-
-function PercentChangeCell({ value }: { value: number | null }) {
-  if (value === null) return <span style={{ color: '#9aa0a6' }}>-</span>
-  const isIncrease = value >= 0
-  const color = isIncrease ? '#f28b82' : '#81c995'
-  return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: '2px', color, justifyContent: 'flex-end' }}>
-      <svg
-        width="10"
-        height="10"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-label={isIncrease ? 'increase' : 'decrease'}
-      >
-        {isIncrease ? (
-          <path d="M12 19V5M5 12l7-7 7 7" />
-        ) : (
-          <path d="M12 5v14M5 12l7 7 7-7" />
-        )}
-      </svg>
-      {formatPercentage(value)}
-    </span>
-  )
 }
 
 function SkeletonRows() {
@@ -95,29 +55,33 @@ function SkeletonRows() {
   )
 }
 
+function AmountCell({ value, currencyCode }: { value: number; currencyCode: string }) {
+  if (value === 0) {
+    return <span style={{ color: '#9aa0a6' }}>{formatCurrency(0, currencyCode)}</span>
+  }
+  return <span>{formatCurrency(value, currencyCode)}</span>
+}
+
 export function BreakdownTable({
   rows,
   totals,
+  periods,
   currencyCode,
   isLoading,
-  filters,
+  groupBy,
   onRowClick,
   onExportCSV,
 }: BreakdownTableProps) {
-  const groupBy = filters.groupBy
   const breakpoint = useBreakpoint()
-  const isMobile = breakpoint === 'mobile'
-  const isTablet = breakpoint === 'tablet'
-  const showPercentChange = !isMobile && !isTablet
+  const isMobileOrTablet = breakpoint === 'mobile' || breakpoint === 'tablet'
 
-  const [sortKey, setSortKey] = useState<SortKey>('actualCost')
+  const [sortKey, setSortKey] = useState<SortKey>('total')
   const [sortDir, setSortDir] = useState<SortDirection>('desc')
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null)
 
   function handleSort(key: SortKey) {
     return (next: SortDirection) => {
       if (next === null) {
-        setSortKey('actualCost')
+        setSortKey('total')
         setSortDir('desc')
       } else {
         setSortKey(key)
@@ -130,28 +94,26 @@ export function BreakdownTable({
     return sortKey === key ? sortDir : null
   }
 
-  function toggleExpand(id: string, e: React.MouseEvent) {
-    e.stopPropagation()
-    setExpandedRowId((prev) => (prev === id ? null : id))
-  }
-
   const sorted = useMemo(() => {
     if (!sortDir) return rows
     return [...rows].sort((a, b) => {
-      const aVal = a[sortKey]
-      const bVal = b[sortKey]
-      // nulls always go to the end regardless of direction
-      if (aVal === null && bVal !== null) return 1
-      if (aVal !== null && bVal === null) return -1
-      if (aVal === null && bVal === null) return 0
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return sortDir === 'asc'
-          ? aVal.localeCompare(bVal)
-          : bVal.localeCompare(aVal)
+      let aVal: number | string
+      let bVal: number | string
+      if (sortKey === 'name') {
+        aVal = a.name
+        bVal = b.name
+      } else if (sortKey === 'total') {
+        aVal = a.total
+        bVal = b.total
+      } else {
+        // period key
+        aVal = a.values[sortKey] ?? 0
+        bVal = b.values[sortKey] ?? 0
       }
-      const aNum = aVal as number
-      const bNum = bVal as number
-      return sortDir === 'asc' ? aNum - bNum : bNum - aNum
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        return sortDir === 'asc' ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal)
+      }
+      return sortDir === 'asc' ? (aVal as number) - (bVal as number) : (bVal as number) - (aVal as number)
     })
   }, [rows, sortKey, sortDir])
 
@@ -170,6 +132,14 @@ export function BreakdownTable({
     backgroundColor: '#1e1e1e',
     borderBottom: '1px solid #3c4043',
   }
+
+  const stickyFirstCol: React.CSSProperties = isMobileOrTablet
+    ? { position: 'sticky', left: 0, zIndex: 1, backgroundColor: '#1e1e1e' }
+    : {}
+
+  const stickyFirstColBody: React.CSSProperties = isMobileOrTablet
+    ? { position: 'sticky', left: 0, zIndex: 1, backgroundColor: '#1e1e1e' }
+    : {}
 
   return (
     <div
@@ -232,62 +202,43 @@ export function BreakdownTable({
           No data available for the selected filters.
         </div>
       ) : (
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              <th style={{ ...headerCellStyle, textAlign: 'left' }}>
-                <SortableHeader
-                  label={GROUP_COLUMN_LABEL[groupBy]}
-                  direction={dirFor('name')}
-                  onSort={handleSort('name')}
-                />
-              </th>
-              <th style={{ ...headerCellStyle, textAlign: 'right' }}>
-                <SortableHeader
-                  label="Actual Cost"
-                  direction={dirFor('actualCost')}
-                  onSort={handleSort('actualCost')}
-                />
-              </th>
-              {!isMobile && (
-                <th style={{ ...headerCellStyle, textAlign: 'right' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: periods.length > 3 ? `${300 + periods.length * 120}px` : undefined }}>
+            <thead>
+              <tr>
+                <th style={{ ...headerCellStyle, textAlign: 'left', ...stickyFirstCol }}>
                   <SortableHeader
-                    label="Budgeted"
-                    direction={dirFor('budgeted')}
-                    onSort={handleSort('budgeted')}
+                    label={GROUP_COLUMN_LABEL[groupBy]}
+                    direction={dirFor('name')}
+                    onSort={handleSort('name')}
                   />
                 </th>
-              )}
-              {!isMobile && (
+                {periods.map((period) => (
+                  <th key={period} style={{ ...headerCellStyle, textAlign: 'right' }}>
+                    <SortableHeader
+                      label={period}
+                      direction={dirFor(period)}
+                      onSort={handleSort(period)}
+                    />
+                  </th>
+                ))}
                 <th style={{ ...headerCellStyle, textAlign: 'right' }}>
                   <SortableHeader
-                    label="Variance"
-                    direction={dirFor('variance')}
-                    onSort={handleSort('variance')}
+                    label="Total"
+                    direction={dirFor('total')}
+                    onSort={handleSort('total')}
                   />
                 </th>
-              )}
-              {showPercentChange && (
-                <th style={{ ...headerCellStyle, textAlign: 'right' }}>
-                  <SortableHeader
-                    label="% Change"
-                    direction={dirFor('percentChange')}
-                    onSort={handleSort('percentChange')}
-                  />
-                </th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {sorted.map((row) => {
-              const isExpanded = expandedRowId === row.id
-              return (
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((row) => (
                 <Fragment key={row.id}>
                   <tr
                     onClick={() => onRowClick(row)}
                     style={{
                       cursor: 'pointer',
-                      borderBottom: isExpanded ? 'none' : '1px solid #2d2d2d',
+                      borderBottom: '1px solid #2d2d2d',
                     }}
                     onMouseEnter={(e) => {
                       ;(e.currentTarget as HTMLTableRowElement).style.backgroundColor = '#2d2d2d'
@@ -296,7 +247,7 @@ export function BreakdownTable({
                       ;(e.currentTarget as HTMLTableRowElement).style.backgroundColor = ''
                     }}
                   >
-                    <td style={cellStyle}>
+                    <td style={{ ...cellStyle, ...stickyFirstColBody }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span
                           style={{
@@ -307,124 +258,43 @@ export function BreakdownTable({
                             flexShrink: 0,
                           }}
                         />
-                        <span style={{ fontWeight: 500, flex: 1 }}>{row.name}</span>
-                        {isMobile && (
-                          <button
-                            type="button"
-                            aria-label={isExpanded ? `Collapse ${row.name}` : `Expand ${row.name}`}
-                            onClick={(e) => toggleExpand(row.id, e)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              color: '#9aa0a6',
-                              padding: '2px',
-                              display: 'flex',
-                              alignItems: 'center',
-                              flexShrink: 0,
-                            }}
-                          >
-                            <svg
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              aria-hidden="true"
-                              style={{
-                                transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)',
-                                transition: 'transform 150ms ease',
-                              }}
-                            >
-                              <path d="M9 18l6-6-6-6" />
-                            </svg>
-                          </button>
-                        )}
+                        <span style={{ fontWeight: 500 }}>{row.name}</span>
                       </div>
                     </td>
-                    <td style={rightCell}>{formatCurrency(row.actualCost, currencyCode)}</td>
-                    {!isMobile && (
-                      <td style={rightCell}>
-                        {row.budgeted !== null
-                          ? formatCurrency(row.budgeted, currencyCode)
-                          : <span style={{ color: '#9aa0a6' }}>-</span>}
+                    {periods.map((period) => (
+                      <td key={period} style={rightCell}>
+                        <AmountCell value={row.values[period] ?? 0} currencyCode={currencyCode} />
                       </td>
-                    )}
-                    {!isMobile && (
-                      <td style={rightCell}>
-                        <VarianceCell value={row.variance} currencyCode={currencyCode} />
-                      </td>
-                    )}
-                    {showPercentChange && (
-                      <td style={rightCell}>
-                        <PercentChangeCell value={row.percentChange} />
-                      </td>
-                    )}
+                    ))}
+                    <td style={{ ...rightCell, fontWeight: 500 }}>
+                      <AmountCell value={row.total} currencyCode={currencyCode} />
+                    </td>
                   </tr>
-                  {/* Mobile expandable row */}
-                  {isMobile && isExpanded && (
-                    <tr
-                      style={{ borderBottom: '1px solid #2d2d2d', backgroundColor: '#252525' }}
-                    >
-                      <td colSpan={2} style={{ padding: '8px 16px 12px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: "'Roboto', sans-serif", fontSize: '12px' }}>
-                            <span style={{ color: '#9aa0a6' }}>Budgeted</span>
-                            <span style={{ color: '#e8eaed' }}>
-                              {row.budgeted !== null ? formatCurrency(row.budgeted, currencyCode) : '-'}
-                            </span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: "'Roboto', sans-serif", fontSize: '12px' }}>
-                            <span style={{ color: '#9aa0a6' }}>Variance</span>
-                            <span><VarianceCell value={row.variance} currencyCode={currencyCode} /></span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontFamily: "'Roboto', sans-serif", fontSize: '12px' }}>
-                            <span style={{ color: '#9aa0a6' }}>% Change</span>
-                            <span><PercentChangeCell value={row.percentChange} /></span>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
                 </Fragment>
-              )
-            })}
-          </tbody>
-          {/* Totals footer */}
-          <tfoot>
-            <tr
-              style={{
-                backgroundColor: 'rgba(18,18,18,0.3)',
-                borderTop: '1px solid #3c4043',
-              }}
-            >
-              <td style={{ ...cellStyle, fontWeight: 500, fontSize: '16px' }}>Total</td>
-              <td style={{ ...rightCell, fontWeight: 500, fontSize: '16px' }}>
-                {formatCurrency(totals.actualCost, currencyCode)}
-              </td>
-              {!isMobile && (
+              ))}
+            </tbody>
+            <tfoot>
+              <tr
+                style={{
+                  backgroundColor: 'rgba(18,18,18,0.3)',
+                  borderTop: '1px solid #3c4043',
+                }}
+              >
+                <td style={{ ...cellStyle, fontWeight: 500, fontSize: '16px', ...stickyFirstColBody }}>
+                  Total
+                </td>
+                {periods.map((period) => (
+                  <td key={period} style={{ ...rightCell, fontWeight: 500, fontSize: '16px' }}>
+                    <AmountCell value={totals.values[period] ?? 0} currencyCode={currencyCode} />
+                  </td>
+                ))}
                 <td style={{ ...rightCell, fontWeight: 500, fontSize: '16px' }}>
-                  {totals.budgeted !== null
-                    ? formatCurrency(totals.budgeted, currencyCode)
-                    : <span style={{ color: '#9aa0a6' }}>-</span>}
+                  <AmountCell value={totals.total} currencyCode={currencyCode} />
                 </td>
-              )}
-              {!isMobile && (
-                <td style={{ ...rightCell, fontWeight: 500, fontSize: '16px' }}>
-                  <VarianceCell value={totals.variance} currencyCode={currencyCode} />
-                </td>
-              )}
-              {showPercentChange && (
-                <td style={rightCell}>
-                  <PercentChangeCell value={totals.percentChange} />
-                </td>
-              )}
-            </tr>
-          </tfoot>
-        </table>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       )}
     </div>
   )

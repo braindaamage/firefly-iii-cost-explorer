@@ -2,8 +2,6 @@ export interface BreakdownRow {
   id: string
   name: string
   color: string
-  actualCost: number
-  budgeted: number | null
-  variance: number | null
-  percentChange: number | null
+  values: Record<string, number>  // key = period label, value = amount
+  total: number
 }

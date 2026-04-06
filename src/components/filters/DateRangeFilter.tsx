@@ -62,6 +62,7 @@ export function DateRangeFilter({
         return
       }
       setDateError(null)
+      onSelectPreset('custom')
       onSelectCustomRange({ start: startDate, end: endDate })
       onClose()
     }
