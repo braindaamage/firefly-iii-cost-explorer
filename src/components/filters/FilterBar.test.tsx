@@ -20,8 +20,8 @@ vi.mock('../../hooks/useConfig', () => ({
 
 vi.mock('../../api/accounts', () => ({
   fetchAssetAccounts: vi.fn().mockResolvedValue([
-    { id: '1', name: 'Checking', name_with_balance: 'Checking', type: 'asset', currency_id: '1', currency_code: 'EUR', currency_symbol: '€', currency_decimal_places: 2 },
-    { id: '2', name: 'Savings', name_with_balance: 'Savings', type: 'asset', currency_id: '1', currency_code: 'EUR', currency_symbol: '€', currency_decimal_places: 2 },
+    { id: '1', name: 'Checking' },
+    { id: '2', name: 'Savings' },
   ]),
 }))
 
@@ -40,7 +40,7 @@ vi.mock('../../api/budgets', () => ({
 
 vi.mock('../../api/tags', () => ({
   fetchTags: vi.fn().mockResolvedValue([
-    { id: '1', name: 'vacation', tag: 'vacation' },
+    { id: '1', name: 'vacation' },
   ]),
 }))
 
@@ -148,6 +148,80 @@ describe('FilterBar', () => {
       availableOptionalFilters: ['tagIds'],
     })
     expect(screen.getByText('Budgets:')).toBeInTheDocument()
+  })
+
+  it('renders search input inside accounts dropdown', async () => {
+    renderFilterBar()
+    await userEvent.click(screen.getByRole('button', { name: /accounts/i }))
+    await waitFor(() => screen.getByLabelText('Search items'))
+    expect(screen.getByLabelText('Search items')).toBeInTheDocument()
+  })
+
+  it('filters accounts by search text', async () => {
+    renderFilterBar()
+    await userEvent.click(screen.getByRole('button', { name: /accounts/i }))
+    await waitFor(() => screen.getByLabelText('Search items'))
+    await userEvent.type(screen.getByLabelText('Search items'), 'Savings')
+    expect(screen.queryByLabelText('Checking')).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Savings')).toBeInTheDocument()
+  })
+
+  it('clearing search shows all items again', async () => {
+    renderFilterBar()
+    await userEvent.click(screen.getByRole('button', { name: /accounts/i }))
+    await waitFor(() => screen.getByLabelText('Search items'))
+    await userEvent.type(screen.getByLabelText('Search items'), 'Savings')
+    await userEvent.clear(screen.getByLabelText('Search items'))
+    expect(screen.getByLabelText('Checking')).toBeInTheDocument()
+    expect(screen.getByLabelText('Savings')).toBeInTheDocument()
+  })
+
+  it('Select all with search active only selects filtered items', async () => {
+    renderFilterBar()
+    await userEvent.click(screen.getByRole('button', { name: /accounts/i }))
+    await waitFor(() => screen.getByLabelText('Search items'))
+    await userEvent.type(screen.getByLabelText('Search items'), 'Savings')
+    await userEvent.click(screen.getByLabelText('Select all'))
+    expect(mockUpdateFilter).toHaveBeenCalledWith('accountIds', ['2'])
+  })
+
+  it('shows clear button on Categories chip when categoryIds is non-empty', async () => {
+    renderFilterBar({
+      ...defaultProps,
+      filters: { ...DEFAULT_FILTERS, categoryIds: ['1'] },
+    })
+    expect(screen.getByRole('button', { name: /clear categories/i })).toBeInTheDocument()
+  })
+
+  it('does not show clear button on Categories chip when categoryIds is empty', () => {
+    renderFilterBar()
+    expect(screen.queryByRole('button', { name: /clear categories/i })).not.toBeInTheDocument()
+  })
+
+  it('clicking clear on Categories chip calls updateFilter with empty array', async () => {
+    renderFilterBar({
+      ...defaultProps,
+      filters: { ...DEFAULT_FILTERS, categoryIds: ['1'] },
+    })
+    await userEvent.click(screen.getByRole('button', { name: /clear categories/i }))
+    expect(mockUpdateFilter).toHaveBeenCalledWith('categoryIds', [])
+  })
+
+  it('shows clear button on Accounts chip when accountIds is non-empty', () => {
+    renderFilterBar({
+      ...defaultProps,
+      filters: { ...DEFAULT_FILTERS, accountIds: ['1'] },
+    })
+    expect(screen.getByRole('button', { name: /clear accounts/i })).toBeInTheDocument()
+  })
+
+  it('clicking clear on Accounts chip calls updateFilter with empty array', async () => {
+    renderFilterBar({
+      ...defaultProps,
+      filters: { ...DEFAULT_FILTERS, accountIds: ['1'] },
+    })
+    await userEvent.click(screen.getByRole('button', { name: /clear accounts/i }))
+    expect(mockUpdateFilter).toHaveBeenCalledWith('accountIds', [])
   })
 
   it('calls removeOptionalFilter when X is clicked on optional chip', async () => {

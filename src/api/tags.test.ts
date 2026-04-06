@@ -1,14 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fetchTags } from './tags'
-import type { AutocompleteTag } from './types'
+import type { TagRaw } from './types'
 
 const BASE_URL = 'https://firefly.example.com'
 const TOKEN = 'test-token'
 
-const mockTags: AutocompleteTag[] = [
-  { id: '1', name: 'vacation', tag: 'vacation' },
-  { id: '2', name: 'work', tag: 'work' },
-]
+function mockPaginatedResponse(data: TagRaw[], totalPages = 1) {
+  return {
+    data,
+    meta: { pagination: { total: data.length, count: data.length, per_page: 50, current_page: 1, total_pages: totalPages } },
+  }
+}
 
 function mockFetchOk(body: unknown) {
   vi.stubGlobal(
@@ -25,20 +27,46 @@ function mockFetchOk(body: unknown) {
 describe('fetchTags', () => {
   beforeEach(() => vi.restoreAllMocks())
 
-  it('calls correct URL', async () => {
-    mockFetchOk(mockTags)
+  it('calls /tags endpoint (not autocomplete)', async () => {
+    mockFetchOk(mockPaginatedResponse([]))
     await fetchTags(BASE_URL, TOKEN)
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-      `${BASE_URL}/api/v1/autocomplete/tags?limit=100`,
+      expect.stringContaining('/api/v1/tags'),
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }),
       })
     )
+    expect(vi.mocked(fetch)).not.toHaveBeenCalledWith(
+      expect.stringContaining('autocomplete'),
+      expect.anything()
+    )
   })
 
-  it('returns parsed tag list', async () => {
-    mockFetchOk(mockTags)
+  it('returns mapped { id, name } list using attributes.tag as name', async () => {
+    const raw: TagRaw[] = [
+      { id: '1', attributes: { tag: 'vacation' } },
+      { id: '2', attributes: { tag: 'work' } },
+    ]
+    mockFetchOk(mockPaginatedResponse(raw))
     const result = await fetchTags(BASE_URL, TOKEN)
-    expect(result).toEqual(mockTags)
+    expect(result).toEqual([
+      { id: '1', name: 'vacation' },
+      { id: '2', name: 'work' },
+    ])
+  })
+
+  it('fetches all pages and returns combined results', async () => {
+    const page1Raw: TagRaw[] = [{ id: '1', attributes: { tag: 'vacation' } }]
+    const page2Raw: TagRaw[] = [{ id: '2', attributes: { tag: 'work' } }]
+    const page1 = { data: page1Raw, meta: { pagination: { total: 2, count: 1, per_page: 1, current_page: 1, total_pages: 2 } } }
+    const page2 = { data: page2Raw, meta: { pagination: { total: 2, count: 1, per_page: 1, current_page: 2, total_pages: 2 } } }
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, statusText: 'OK', json: () => Promise.resolve(page1) })
+      .mockResolvedValueOnce({ ok: true, status: 200, statusText: 'OK', json: () => Promise.resolve(page2) })
+    )
+    const result = await fetchTags(BASE_URL, TOKEN)
+    expect(result).toHaveLength(2)
+    expect(result[0]).toEqual({ id: '1', name: 'vacation' })
+    expect(result[1]).toEqual({ id: '2', name: 'work' })
   })
 })

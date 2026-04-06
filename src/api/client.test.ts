@@ -115,6 +115,60 @@ describe('createApiClient', () => {
     })
   })
 
+  describe('fetchAllPages', () => {
+    it('returns all items from a single page', async () => {
+      const page1 = {
+        data: [{ id: '1', attributes: { name: 'A' } }],
+        meta: { pagination: { total_pages: 1, total: 1, count: 1, per_page: 50, current_page: 1 } },
+      }
+      vi.stubGlobal('fetch', mockFetchOk(page1))
+      const client = createApiClient('https://firefly.example.com', 'token')
+      const result = await client.fetchAllPages('/categories')
+      expect(result).toEqual(page1.data)
+    })
+
+    it('iterates all pages and returns combined items', async () => {
+      const page1 = {
+        data: [{ id: '1', attributes: { name: 'A' } }],
+        meta: { pagination: { total_pages: 3, total: 3, count: 1, per_page: 1, current_page: 1 } },
+      }
+      const page2 = {
+        data: [{ id: '2', attributes: { name: 'B' } }],
+        meta: { pagination: { total_pages: 3, total: 3, count: 1, per_page: 1, current_page: 2 } },
+      }
+      const page3 = {
+        data: [{ id: '3', attributes: { name: 'C' } }],
+        meta: { pagination: { total_pages: 3, total: 3, count: 1, per_page: 1, current_page: 3 } },
+      }
+      vi.stubGlobal('fetch', vi.fn()
+        .mockResolvedValueOnce({ ok: true, status: 200, statusText: 'OK', json: () => Promise.resolve(page1) })
+        .mockResolvedValueOnce({ ok: true, status: 200, statusText: 'OK', json: () => Promise.resolve(page2) })
+        .mockResolvedValueOnce({ ok: true, status: 200, statusText: 'OK', json: () => Promise.resolve(page3) })
+      )
+      const client = createApiClient('https://firefly.example.com', 'token')
+      const result = await client.fetchAllPages('/categories')
+      expect(result).toHaveLength(3)
+      expect(result[0]).toEqual(page1.data[0])
+      expect(result[1]).toEqual(page2.data[0])
+      expect(result[2]).toEqual(page3.data[0])
+    })
+
+    it('appends page param to endpoint with existing query string', async () => {
+      const page1 = {
+        data: [],
+        meta: { pagination: { total_pages: 1, total: 0, count: 0, per_page: 50, current_page: 1 } },
+      }
+      const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, statusText: 'OK', json: () => Promise.resolve(page1) })
+      vi.stubGlobal('fetch', fetchMock)
+      const client = createApiClient('https://firefly.example.com', 'token')
+      await client.fetchAllPages('/accounts?type=asset')
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('type=asset&page=1'),
+        expect.anything()
+      )
+    })
+  })
+
   describe('testConnection', () => {
     it('returns success with version on successful /about response', async () => {
       const responseBody = {

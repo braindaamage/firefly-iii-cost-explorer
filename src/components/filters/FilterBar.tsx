@@ -47,7 +47,13 @@ function MultiSelectDropdown({
   onChange,
   loading,
 }: MultiSelectDropdownProps) {
-  const allSelected = items.length > 0 && selectedIds.length === items.length
+  const [search, setSearch] = useState('')
+
+  const filtered = search
+    ? items.filter((item) => item.name.toLowerCase().includes(search.toLowerCase()))
+    : items
+
+  const allFilteredSelected = filtered.length > 0 && filtered.every((item) => selectedIds.includes(item.id))
 
   function toggleItem(id: string) {
     if (selectedIds.includes(id)) {
@@ -58,10 +64,12 @@ function MultiSelectDropdown({
   }
 
   function toggleAll() {
-    if (allSelected) {
-      onChange([])
+    if (allFilteredSelected) {
+      onChange(selectedIds.filter((id) => !filtered.some((item) => item.id === id)))
     } else {
-      onChange(items.map((i) => i.id))
+      const newIds = new Set(selectedIds)
+      filtered.forEach((item) => newIds.add(item.id))
+      onChange(Array.from(newIds))
     }
   }
 
@@ -75,10 +83,29 @@ function MultiSelectDropdown({
 
   return (
     <div>
+      <input
+        type="text"
+        placeholder="Search..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        aria-label="Search items"
+        style={{
+          width: '100%',
+          boxSizing: 'border-box',
+          padding: '8px 16px',
+          backgroundColor: '#121212',
+          border: 'none',
+          borderBottom: '1px solid #3c4043',
+          color: '#e8eaed',
+          fontSize: '13px',
+          fontFamily: "'Roboto', sans-serif",
+          outline: 'none',
+        }}
+      />
       <div
         onClick={toggleAll}
         role="option"
-        aria-selected={allSelected}
+        aria-selected={allFilteredSelected}
         style={{
           padding: '8px 16px',
           cursor: 'pointer',
@@ -99,51 +126,53 @@ function MultiSelectDropdown({
       >
         <input
           type="checkbox"
-          checked={allSelected}
+          checked={allFilteredSelected}
           onChange={toggleAll}
           aria-label="Select all"
           onClick={(e) => e.stopPropagation()}
           style={{ accentColor: '#8ab4f8' }}
         />
-        {allSelected ? 'Deselect all' : 'Select all'}
+        {allFilteredSelected ? 'Deselect all' : 'Select all'}
       </div>
-      {items.map((item) => {
-        const checked = selectedIds.includes(item.id)
-        return (
-          <div
-            key={item.id}
-            role="option"
-            aria-selected={checked}
-            onClick={() => toggleItem(item.id)}
-            style={{
-              padding: '8px 16px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '13px',
-              color: '#e8eaed',
-              fontFamily: "'Roboto', sans-serif",
-            }}
-            onMouseEnter={(e) => {
-              ;(e.currentTarget as HTMLDivElement).style.backgroundColor = '#2d2d2d'
-            }}
-            onMouseLeave={(e) => {
-              ;(e.currentTarget as HTMLDivElement).style.backgroundColor = ''
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={checked}
-              onChange={() => toggleItem(item.id)}
-              aria-label={item.name}
-              onClick={(e) => e.stopPropagation()}
-              style={{ accentColor: '#8ab4f8' }}
-            />
-            {item.name}
-          </div>
-        )
-      })}
+      <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
+        {filtered.map((item) => {
+          const checked = selectedIds.includes(item.id)
+          return (
+            <div
+              key={item.id}
+              role="option"
+              aria-selected={checked}
+              onClick={() => toggleItem(item.id)}
+              style={{
+                padding: '8px 16px',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '13px',
+                color: '#e8eaed',
+                fontFamily: "'Roboto', sans-serif",
+              }}
+              onMouseEnter={(e) => {
+                ;(e.currentTarget as HTMLDivElement).style.backgroundColor = '#2d2d2d'
+              }}
+              onMouseLeave={(e) => {
+                ;(e.currentTarget as HTMLDivElement).style.backgroundColor = ''
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggleItem(item.id)}
+                aria-label={item.name}
+                onClick={(e) => e.stopPropagation()}
+                style={{ accentColor: '#8ab4f8' }}
+              />
+              {item.name}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -349,6 +378,7 @@ export function FilterBar({
           label="Accounts:"
           value={getSelectionLabel(filters.accountIds, accounts?.length ?? 0)}
           onClick={() => toggleChip('accounts')}
+          onClear={filters.accountIds.length > 0 ? () => updateFilter('accountIds', []) : undefined}
         />
         <FilterDropdown
           open={openChip === 'accounts'}
@@ -370,6 +400,7 @@ export function FilterBar({
           label="Categories:"
           value={getSelectionLabel(filters.categoryIds, categories?.length ?? 0)}
           onClick={() => toggleChip('categories')}
+          onClear={filters.categoryIds.length > 0 ? () => updateFilter('categoryIds', []) : undefined}
         />
         <FilterDropdown
           open={openChip === 'categories'}
