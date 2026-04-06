@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useConfig } from '../../hooks/useConfig'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -39,6 +39,7 @@ interface MultiSelectDropdownProps {
   selectedIds: string[]
   onChange: (ids: string[]) => void
   loading?: boolean
+  open: boolean
 }
 
 function MultiSelectDropdown({
@@ -46,8 +47,13 @@ function MultiSelectDropdown({
   selectedIds,
   onChange,
   loading,
+  open,
 }: MultiSelectDropdownProps) {
   const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    if (!open) setSearch('')
+  }, [open])
 
   const filtered = search
     ? items.filter((item) => item.name.toLowerCase().includes(search.toLowerCase()))
@@ -390,6 +396,7 @@ export function FilterBar({
             selectedIds={filters.accountIds}
             onChange={(ids) => updateFilter('accountIds', ids)}
             loading={accountsLoading}
+            open={openChip === 'accounts'}
           />
         </FilterDropdown>
       </div>
@@ -412,6 +419,7 @@ export function FilterBar({
             selectedIds={filters.categoryIds}
             onChange={(ids) => updateFilter('categoryIds', ids)}
             loading={categoriesLoading}
+            open={openChip === 'categories'}
           />
         </FilterDropdown>
       </div>
@@ -435,6 +443,7 @@ export function FilterBar({
               selectedIds={filters.budgetIds}
               onChange={(ids) => updateFilter('budgetIds', ids)}
               loading={budgetsLoading}
+              open={openChip === 'budgets'}
             />
           </FilterDropdown>
         </div>
@@ -458,6 +467,7 @@ export function FilterBar({
               selectedIds={filters.tagIds}
               onChange={(ids) => updateFilter('tagIds', ids)}
               loading={tagsLoading}
+              open={openChip === 'tags'}
             />
           </FilterDropdown>
         </div>

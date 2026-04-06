@@ -185,6 +185,25 @@ describe('FilterBar', () => {
     expect(mockUpdateFilter).toHaveBeenCalledWith('accountIds', ['2'])
   })
 
+  it('search input is empty when dropdown is reopened after closing', async () => {
+    renderFilterBar()
+    // Open accounts dropdown
+    await userEvent.click(screen.getByRole('button', { name: /accounts/i }))
+    await waitFor(() => screen.getByLabelText('Search items'))
+    // Type search text
+    await userEvent.type(screen.getByLabelText('Search items'), 'Savings')
+    expect(screen.queryByLabelText('Checking')).not.toBeInTheDocument()
+    // Close dropdown by clicking the chip again
+    await userEvent.click(screen.getByRole('button', { name: /accounts/i }))
+    // Reopen dropdown
+    await userEvent.click(screen.getByRole('button', { name: /accounts/i }))
+    await waitFor(() => screen.getByLabelText('Search items'))
+    // Search should be reset and all items visible
+    expect(screen.getByLabelText('Search items')).toHaveValue('')
+    expect(screen.getByLabelText('Checking')).toBeInTheDocument()
+    expect(screen.getByLabelText('Savings')).toBeInTheDocument()
+  })
+
   it('shows clear button on Categories chip when categoryIds is non-empty', async () => {
     renderFilterBar({
       ...defaultProps,
