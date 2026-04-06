@@ -5,8 +5,11 @@ import { FilterBar } from '../components/filters/FilterBar'
 import { ChartHeader } from '../components/chart/ChartHeader'
 import { SpendingTrendChart } from '../components/chart/SpendingTrendChart'
 import { ChartLegend } from '../components/chart/ChartLegend'
+import { BreakdownTable } from '../components/table/BreakdownTable'
 import { useFilters } from '../hooks/useFilters'
 import { useDashboardData } from '../hooks/useDashboardData'
+import { useBreakdownData } from '../hooks/useBreakdownData'
+import type { BreakdownRow } from '../types/breakdown'
 
 export function DashboardPage() {
   const {
@@ -19,7 +22,12 @@ export function DashboardPage() {
   } = useFilters()
 
   const dashboardData = useDashboardData(filters)
+  const breakdownData = useBreakdownData(filters)
   const [showCumulative, setShowCumulative] = useState(false)
+
+  function handleRowClick(_row: BreakdownRow) {
+    // Drill-down will be implemented in Phase 5
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
@@ -73,6 +81,15 @@ export function DashboardPage() {
             <ChartLegend series={dashboardData.series} />
           )}
         </div>
+
+        <BreakdownTable
+          rows={breakdownData.rows}
+          totals={breakdownData.totals}
+          currencyCode={breakdownData.currencyCode}
+          isLoading={breakdownData.isLoading}
+          filters={filters}
+          onRowClick={handleRowClick}
+        />
       </main>
     </div>
   )

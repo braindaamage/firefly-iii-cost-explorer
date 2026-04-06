@@ -48,6 +48,24 @@ export interface InsightEntry {
   currency_symbol: string
 }
 
+export interface BudgetLimitRaw {
+  id: string
+  attributes: {
+    budget_id: number
+    budget_name: string
+    amount: string
+    currency_code: string
+  }
+}
+
+export interface BudgetLimit {
+  id: string
+  budget_id: string
+  budget_name: string
+  amount: number
+  currency_code: string
+}
+
 export interface AboutResponse {
   data: {
     version: string
