@@ -36,12 +36,13 @@ export function exportBreakdownCSV(
   const date = format(new Date(), 'yyyy-MM-dd')
   const filename = `cost-explorer-breakdown-${groupBy}-${date}.csv`
 
-  const headers = [GROUP_COLUMN_LABEL[groupBy], ...periods, 'Total'].join(',')
+  const headers = [GROUP_COLUMN_LABEL[groupBy], ...periods, 'Average', 'Total'].join(',')
 
   function rowToCSV(row: BreakdownRow): string {
     return [
       escapeCSV(row.name),
       ...periods.map((p) => (row.values[p] ?? 0).toFixed(2)),
+      row.average.toFixed(2),
       row.total.toFixed(2),
     ].join(',')
   }

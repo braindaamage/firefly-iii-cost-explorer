@@ -13,7 +13,8 @@ export function transformToBreakdownRows(
       values[point.period] = val
       total += val
     })
-    return { id: s.id, name: s.name, color: s.color, values, total }
+    const average = chartData.length > 0 ? total / chartData.length : 0
+    return { id: s.id, name: s.name, color: s.color, values, average, total }
   })
 
   // Sort by total descending
@@ -28,12 +29,14 @@ export function transformToBreakdownRows(
     )
   })
   const grandTotal = rows.reduce((sum, r) => sum + r.total, 0)
+  const totalAverage = chartData.length > 0 ? grandTotal / chartData.length : 0
 
   const totals: BreakdownRow = {
     id: 'total',
     name: 'Total',
     color: '',
     values: totalValues,
+    average: totalAverage,
     total: grandTotal,
   }
 

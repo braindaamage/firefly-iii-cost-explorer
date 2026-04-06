@@ -79,4 +79,26 @@ describe('transformToBreakdownRows', () => {
     expect(rows).toHaveLength(0)
     expect(totals.total).toBe(0)
   })
+
+  it('each row average is total / numberOfPeriods', () => {
+    const { rows } = transformToBreakdownRows(chartData, series)
+    const groceries = rows.find((r) => r.name === 'Groceries')!
+    // total = 450 + 380 + 520 = 1350, periods = 3
+    expect(groceries.average).toBeCloseTo(1350 / 3)
+    const transport = rows.find((r) => r.name === 'Transport')!
+    // total = 120 + 90 + 150 = 360, periods = 3
+    expect(transport.average).toBeCloseTo(360 / 3)
+  })
+
+  it('totals average is grandTotal / numberOfPeriods', () => {
+    const { totals } = transformToBreakdownRows(chartData, series)
+    // grandTotal = 1350 + 360 = 1710, periods = 3
+    expect(totals.average).toBeCloseTo(1710 / 3)
+  })
+
+  it('average is 0 when chartData is empty', () => {
+    const { rows, totals } = transformToBreakdownRows([], series)
+    rows.forEach((r) => expect(r.average).toBe(0))
+    expect(totals.average).toBe(0)
+  })
 })
