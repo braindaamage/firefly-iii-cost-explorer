@@ -1,7 +1,11 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { Header } from './Header'
+
+vi.mock('../../hooks/useBreakpoint', () => ({
+  useBreakpoint: () => 'desktop',
+}))
 
 function renderHeader(showSettings: boolean) {
   return render(

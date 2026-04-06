@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { DashboardPage } from '../DashboardPage'
@@ -11,6 +11,10 @@ vi.mock('../../hooks/useConfig', () => ({
     saveConfig: vi.fn(),
     clearConfig: vi.fn(),
   }),
+}))
+
+vi.mock('../../hooks/useBreakpoint', () => ({
+  useBreakpoint: vi.fn(() => 'desktop'),
 }))
 
 vi.mock('../../api/accounts', () => ({
@@ -54,12 +58,12 @@ vi.mock('../../lib/chart-export', () => ({
   exportChartAsPNG: vi.fn(),
 }))
 
-function renderPage() {
+function renderPage(initialEntries = ['/']) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   })
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={initialEntries}>
       <QueryClientProvider client={client}>
         <DashboardPage />
       </QueryClientProvider>
@@ -96,5 +100,15 @@ describe('DashboardPage', () => {
   it('renders the chart menu button', () => {
     renderPage()
     expect(screen.getByRole('button', { name: /chart menu/i })).toBeInTheDocument()
+  })
+
+  it('shows error banner when insight query fails', async () => {
+    const { fetchInsightExpenseByCategory } = await import('../../api/insights')
+    vi.mocked(fetchInsightExpenseByCategory).mockRejectedValueOnce(new Error('Network error'))
+    renderPage()
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Network error/i)).toBeInTheDocument()
   })
 })

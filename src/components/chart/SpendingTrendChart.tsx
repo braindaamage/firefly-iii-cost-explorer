@@ -8,6 +8,7 @@ import {
   Tooltip,
 } from 'recharts'
 import { formatCurrencyShort, formatCurrency } from '../../lib/formatters'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 import type { ChartDataPoint, SeriesData } from '../../hooks/useDashboardData'
 
 interface SpendingTrendChartProps {
@@ -115,12 +116,15 @@ export function SpendingTrendChart({
   isLoading,
   cumulative,
 }: SpendingTrendChartProps) {
+  const breakpoint = useBreakpoint()
+  const chartHeight = breakpoint === 'mobile' ? 250 : 400
+
   if (isLoading) {
     return (
       <div
         aria-label="Loading chart"
         style={{
-          height: '400px',
+          height: `${chartHeight}px`,
           backgroundColor: '#1e1e1e',
           borderRadius: '4px',
           animation: 'pulse 1.5s ease-in-out infinite',
@@ -133,7 +137,7 @@ export function SpendingTrendChart({
     return (
       <div
         style={{
-          height: '400px',
+          height: `${chartHeight}px`,
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
@@ -175,7 +179,7 @@ export function SpendingTrendChart({
   const chartData = cumulative ? accumulateData(data, series) : data
 
   return (
-    <div style={{ height: '400px' }}>
+    <div style={{ height: `${chartHeight}px`, overflowX: breakpoint === 'mobile' ? 'auto' : 'visible' }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={chartData}

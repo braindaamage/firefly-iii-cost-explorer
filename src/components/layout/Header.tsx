@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 
 interface HeaderProps {
   showSettings: boolean
 }
 
 export function Header({ showSettings }: HeaderProps) {
+  const breakpoint = useBreakpoint()
   return (
     <header
       style={{
@@ -42,7 +44,7 @@ export function Header({ showSettings }: HeaderProps) {
             letterSpacing: '0.4px',
           }}
         >
-          Firefly III Cost Explorer
+          {breakpoint === 'mobile' ? 'Cost Explorer' : 'Firefly III Cost Explorer'}
         </span>
       </div>
 

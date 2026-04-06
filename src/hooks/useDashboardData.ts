@@ -31,6 +31,7 @@ export interface DashboardData {
   series: SeriesData[]
   currencyCode: string
   isLoading: boolean
+  isFetching: boolean
   error: string | null
   periods: Period[]
 }
@@ -134,6 +135,7 @@ export function useDashboardData(filters: FilterState): DashboardData {
   })
 
   const isLoading = queryResults.some((r) => r.isLoading)
+  const isFetching = queryResults.some((r) => r.isFetching)
   const errorResult = queryResults.find((r) => r.error)
   const error = errorResult
     ? (errorResult.error instanceof Error
@@ -146,5 +148,5 @@ export function useDashboardData(filters: FilterState): DashboardData {
     return processResults(periods, allData)
   }, [queryResults, periods])
 
-  return { chartData, series, currencyCode, isLoading, error, periods }
+  return { chartData, series, currencyCode, isLoading, isFetching, error, periods }
 }

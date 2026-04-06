@@ -21,6 +21,7 @@ export interface BreakdownData {
   totals: BreakdownRow
   currencyCode: string
   isLoading: boolean
+  isFetching: boolean
   error: string | null
 }
 
@@ -171,6 +172,11 @@ export function useBreakdownData(filters: FilterState): BreakdownData {
     previousQuery.isLoading ||
     (filters.groupBy === 'budget' && budgetLimitsQuery.isLoading)
 
+  const isFetching =
+    currentQuery.isFetching ||
+    previousQuery.isFetching ||
+    (filters.groupBy === 'budget' && budgetLimitsQuery.isFetching)
+
   const error =
     currentQuery.error instanceof Error
       ? currentQuery.error.message
@@ -187,5 +193,5 @@ export function useBreakdownData(filters: FilterState): BreakdownData {
     return processBreakdown(current, previous, budgetLimits, filters.groupBy)
   }, [currentQuery.data, previousQuery.data, budgetLimitsQuery.data, filters.groupBy])
 
-  return { rows, totals, currencyCode, isLoading, error }
+  return { rows, totals, currencyCode, isLoading, isFetching, error }
 }

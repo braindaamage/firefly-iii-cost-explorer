@@ -2,6 +2,10 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { SpendingTrendChart, accumulateData } from './SpendingTrendChart'
 
+vi.mock('../../hooks/useBreakpoint', () => ({
+  useBreakpoint: () => 'desktop',
+}))
+
 vi.mock('recharts', async () => {
   const actual = await vi.importActual<typeof import('recharts')>('recharts')
   return {
