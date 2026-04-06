@@ -202,7 +202,7 @@ export function BreakdownTable({
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: periods.length > 3 ? `${300 + periods.length * 120}px` : undefined }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: periods.length > 3 ? `${300 + (periods.length + 1) * 120}px` : undefined }}>
             <thead>
               <tr>
                 <th style={{ ...headerCellStyle, textAlign: 'left', ...stickyFirstCol }}>
