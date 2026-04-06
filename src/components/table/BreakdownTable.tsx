@@ -137,10 +137,6 @@ export function BreakdownTable({
     ? { position: 'sticky', left: 0, zIndex: 1, backgroundColor: '#1e1e1e' }
     : {}
 
-  const stickyFirstColBody: React.CSSProperties = isMobileOrTablet
-    ? { position: 'sticky', left: 0, zIndex: 1, backgroundColor: '#1e1e1e' }
-    : {}
-
   return (
     <div
       style={{
@@ -247,7 +243,7 @@ export function BreakdownTable({
                       ;(e.currentTarget as HTMLTableRowElement).style.backgroundColor = ''
                     }}
                   >
-                    <td style={{ ...cellStyle, ...stickyFirstColBody }}>
+                    <td style={{ ...cellStyle, ...stickyFirstCol }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span
                           style={{
@@ -280,7 +276,7 @@ export function BreakdownTable({
                   borderTop: '1px solid #3c4043',
                 }}
               >
-                <td style={{ ...cellStyle, fontWeight: 500, fontSize: '16px', ...stickyFirstColBody }}>
+                <td style={{ ...cellStyle, fontWeight: 500, fontSize: '16px', ...stickyFirstCol }}>
                   Total
                 </td>
                 {periods.map((period) => (

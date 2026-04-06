@@ -1,7 +1,14 @@
 import { format } from 'date-fns'
 import type { BreakdownRow } from '../types/breakdown'
-import type { Transaction } from '../api/types'
 import type { GroupBy } from '../types/filters'
+
+const GROUP_COLUMN_LABEL: Record<GroupBy, string> = {
+  category: 'Category',
+  budget: 'Budget',
+  tag: 'Tag',
+  expense_account: 'Expense Account',
+  asset_account: 'Asset Account',
+}
 
 function escapeCSV(value: string): string {
   if (value.includes(',') || value.includes('"') || value.includes('\n') || value.includes('\r')) {
@@ -29,7 +36,7 @@ export function exportBreakdownCSV(
   const date = format(new Date(), 'yyyy-MM-dd')
   const filename = `cost-explorer-breakdown-${groupBy}-${date}.csv`
 
-  const headers = ['Group Name', ...periods, 'Total'].join(',')
+  const headers = [GROUP_COLUMN_LABEL[groupBy], ...periods, 'Total'].join(',')
 
   function rowToCSV(row: BreakdownRow): string {
     return [
@@ -40,29 +47,5 @@ export function exportBreakdownCSV(
   }
 
   const lines = [headers, ...rows.map(rowToCSV), rowToCSV(totals)]
-  downloadCSV(lines.join('\r\n'), filename)
-}
-
-export function exportTransactionsCSV(transactions: Transaction[], itemName: string): void {
-  const date = format(new Date(), 'yyyy-MM-dd')
-  const safeName = itemName.replace(/[^\w\-]/g, '-')
-  const filename = `cost-explorer-transactions-${safeName}-${date}.csv`
-
-  const header = ['Date', 'Description', 'Amount', 'Currency', 'Source Account', 'Destination Account'].join(',')
-
-  const lines = [
-    header,
-    ...transactions.map((t) =>
-      [
-        t.date,
-        escapeCSV(t.description),
-        t.amount.toFixed(2),
-        t.currencyCode,
-        escapeCSV(t.sourceAccount),
-        escapeCSV(t.destinationAccount),
-      ].join(',')
-    ),
-  ]
-
   downloadCSV(lines.join('\r\n'), filename)
 }

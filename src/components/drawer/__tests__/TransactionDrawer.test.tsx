@@ -60,6 +60,7 @@ function renderDrawer(row: BreakdownRow | null = mockRow, onClose = vi.fn()) {
         row={row}
         periods={mockPeriods}
         filters={DEFAULT_FILTERS}
+        currencyCode="EUR"
         onClose={onClose}
       />
     </QueryClientProvider>
@@ -229,7 +230,7 @@ describe('TransactionDrawer', () => {
     }
     rerender(
       <QueryClientProvider client={client}>
-        <TransactionDrawer row={newRow} periods={mockPeriods} filters={DEFAULT_FILTERS} onClose={vi.fn()} />
+        <TransactionDrawer row={newRow} periods={mockPeriods} filters={DEFAULT_FILTERS} currencyCode="EUR" onClose={vi.fn()} />
       </QueryClientProvider>
     )
     expect(screen.getByText('Transport — Transactions')).toBeInTheDocument()

@@ -12,6 +12,7 @@ interface TransactionDrawerProps {
   row: BreakdownRow | null
   periods: Period[]
   filters: FilterState
+  currencyCode: string
   onClose: () => void
 }
 
@@ -276,7 +277,7 @@ function PeriodSection({
   )
 }
 
-export function TransactionDrawer({ row, periods, filters, onClose }: TransactionDrawerProps) {
+export function TransactionDrawer({ row, periods, filters, currencyCode, onClose }: TransactionDrawerProps) {
   const { config } = useConfig()
   const breakpoint = useBreakpoint()
   const isMobile = breakpoint === 'mobile'
@@ -299,13 +300,6 @@ export function TransactionDrawer({ row, periods, filters, onClose }: Transactio
       setIsOpen(false)
     }
   }, [row])
-
-  // Reset expanded state when row identity changes
-  useEffect(() => {
-    if (row !== null) {
-      setExpandedPeriods(new Set([0]))
-    }
-  }, [row?.id])
 
   useEffect(() => {
     if (isOpen && isMobile) {
@@ -339,8 +333,6 @@ export function TransactionDrawer({ row, periods, filters, onClose }: Transactio
   }
 
   if (!currentRow) return null
-
-  const currencyCode = currentRow ? (Object.keys(currentRow.values).length > 0 ? 'EUR' : 'EUR') : 'EUR'
 
   // Derive subtitle from periods range
   const firstPeriod = periods[0]

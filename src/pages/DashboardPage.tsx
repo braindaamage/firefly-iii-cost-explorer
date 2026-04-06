@@ -171,6 +171,7 @@ export function DashboardPage() {
         row={selectedRow}
         periods={dashboardData.periods}
         filters={filters}
+        currencyCode={dashboardData.currencyCode}
         onClose={() => setSelectedRow(null)}
       />
     </div>
