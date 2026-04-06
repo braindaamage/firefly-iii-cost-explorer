@@ -180,6 +180,7 @@ export function SpendingTrendChart({
 
   return (
     <div style={{ height: `${chartHeight}px`, overflowX: breakpoint === 'mobile' ? 'auto' : 'visible' }}>
+      <div style={{ minWidth: breakpoint === 'mobile' ? '500px' : '100%', height: '100%' }}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart
           data={chartData}
@@ -217,6 +218,7 @@ export function SpendingTrendChart({
           ))}
         </BarChart>
       </ResponsiveContainer>
+      </div>
     </div>
   )
 }

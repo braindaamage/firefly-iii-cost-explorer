@@ -16,7 +16,9 @@ export function useBreakpoint(): Breakpoint {
     const tabletMq = window.matchMedia('(min-width: 768px)')
 
     function handleChange() {
-      setBreakpoint(getBreakpoint())
+      if (desktopMq.matches) setBreakpoint('desktop')
+      else if (tabletMq.matches) setBreakpoint('tablet')
+      else setBreakpoint('mobile')
     }
 
     desktopMq.addEventListener('change', handleChange)

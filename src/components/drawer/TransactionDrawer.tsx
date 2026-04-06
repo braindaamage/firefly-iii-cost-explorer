@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTransactions } from '../../hooks/useTransactions'
 import { useConfig } from '../../hooks/useConfig'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -57,6 +57,15 @@ export function TransactionDrawer({ row, filters, onClose }: TransactionDrawerPr
       // currentRow is cleared in handleTransitionEnd after slide-out completes
     }
   }, [row])
+
+  const closeBtnRef = useRef<HTMLButtonElement>(null)
+
+  // B-2: focus close button on mobile when drawer opens
+  useEffect(() => {
+    if (isOpen && isMobile) {
+      closeBtnRef.current?.focus()
+    }
+  }, [isOpen, isMobile])
 
   // M-1: close on Escape key
   useEffect(() => {
@@ -176,6 +185,7 @@ export function TransactionDrawer({ row, filters, onClose }: TransactionDrawerPr
                 Export CSV
               </button>
               <button
+                ref={closeBtnRef}
                 type="button"
                 onClick={onClose}
                 aria-label="Close drawer"

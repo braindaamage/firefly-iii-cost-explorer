@@ -33,6 +33,8 @@ export interface DashboardData {
   isLoading: boolean
   isFetching: boolean
   error: string | null
+  rawError: Error | null
+  refetch: () => void
   periods: Period[]
 }
 
@@ -137,16 +139,17 @@ export function useDashboardData(filters: FilterState): DashboardData {
   const isLoading = queryResults.some((r) => r.isLoading)
   const isFetching = queryResults.some((r) => r.isFetching)
   const errorResult = queryResults.find((r) => r.error)
-  const error = errorResult
-    ? (errorResult.error instanceof Error
-        ? errorResult.error.message
-        : 'Failed to load data')
-    : null
+  const rawError = errorResult?.error instanceof Error ? errorResult.error : null
+  const error = rawError ? rawError.message : null
+
+  function refetch() {
+    queryResults.forEach((r) => r.refetch())
+  }
 
   const { chartData, series, currencyCode } = useMemo(() => {
     const allData = queryResults.map((r) => r.data)
     return processResults(periods, allData)
   }, [queryResults, periods])
 
-  return { chartData, series, currencyCode, isLoading, isFetching, error, periods }
+  return { chartData, series, currencyCode, isLoading, isFetching, error, rawError, refetch, periods }
 }

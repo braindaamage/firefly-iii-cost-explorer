@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { SortableHeader } from './SortableHeader'
 import { formatCurrency, formatPercentage } from '../../lib/formatters'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -282,9 +282,8 @@ export function BreakdownTable({
             {sorted.map((row) => {
               const isExpanded = expandedRowId === row.id
               return (
-                <>
+                <Fragment key={row.id}>
                   <tr
-                    key={row.id}
                     onClick={() => onRowClick(row)}
                     style={{
                       cursor: 'pointer',
@@ -368,7 +367,6 @@ export function BreakdownTable({
                   {/* Mobile expandable row */}
                   {isMobile && isExpanded && (
                     <tr
-                      key={`${row.id}-expanded`}
                       style={{ borderBottom: '1px solid #2d2d2d', backgroundColor: '#252525' }}
                     >
                       <td colSpan={2} style={{ padding: '8px 16px 12px' }}>
@@ -391,7 +389,7 @@ export function BreakdownTable({
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               )
             })}
           </tbody>

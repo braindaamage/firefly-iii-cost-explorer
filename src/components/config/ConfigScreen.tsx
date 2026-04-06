@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { createApiClient } from '../../api/client'
 import { useConfig } from '../../hooks/useConfig'
+import { ErrorBanner } from '../ui/ErrorBanner'
 import { ConnectionStatus } from './ConnectionStatus'
 import type { ConnectionState } from './ConnectionStatus'
 
@@ -31,6 +32,8 @@ const labelStyle: React.CSSProperties = {
 
 export function ConfigScreen() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const isAuthError = searchParams.get('error') === 'auth'
   const { saveConfig } = useConfig()
 
   const [baseUrl, setBaseUrl] = useState('')
@@ -107,6 +110,10 @@ export function ConfigScreen() {
           gap: '24px',
         }}
       >
+        {isAuthError && (
+          <ErrorBanner message="Your session expired or the API token is invalid. Please reconnect." />
+        )}
+
         <div style={{ textAlign: 'center' }}>
           <h1
             style={{

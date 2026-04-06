@@ -40,19 +40,31 @@ describe('useBreakpoint', () => {
   })
 
   it('updates when media query changes to mobile', () => {
-    const handlers = mockMatchMedia(1440)
+    // Use mutable mock objects so the B-4 handler reads updated .matches from the closure
+    interface MqRecord { matches: boolean; handlers: ChangeHandler[] }
+    const mqRecords: MqRecord[] = []
+
+    vi.stubGlobal('matchMedia', (query: string) => {
+      const rec: MqRecord = {
+        matches: query.includes('1024') ? true : false,
+        handlers: [],
+      }
+      mqRecords.push(rec)
+      return {
+        get matches() { return rec.matches },
+        addEventListener: (_: string, fn: ChangeHandler) => rec.handlers.push(fn),
+        removeEventListener: vi.fn(),
+      }
+    })
+
     const { result } = renderHook(() => useBreakpoint())
     expect(result.current).toBe('desktop')
 
-    // Simulate resize to mobile
-    vi.stubGlobal('matchMedia', (query: string) => ({
-      matches: query.includes('1024') ? false : query.includes('768') ? false : false,
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-    }))
+    // Simulate resize to mobile: flip all matches to false
+    mqRecords.forEach((rec) => { rec.matches = false })
 
     act(() => {
-      handlers.forEach((h) => h())
+      mqRecords.flatMap((rec) => rec.handlers).forEach((h) => h())
     })
 
     expect(result.current).toBe('mobile')

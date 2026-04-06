@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ApiError } from '../api/client'
 import { Header } from '../components/layout/Header'
 import { PageHeader } from '../components/layout/PageHeader'
 import { FilterBar } from '../components/filters/FilterBar'
@@ -15,8 +16,6 @@ import { useBreakdownData } from '../hooks/useBreakdownData'
 import { exportBreakdownCSV } from '../lib/csv-export'
 import { exportChartAsPNG } from '../lib/chart-export'
 import type { BreakdownRow } from '../types/breakdown'
-
-const AUTH_ERROR_MSG = 'Invalid API token'
 
 export function DashboardPage() {
   const navigate = useNavigate()
@@ -36,7 +35,8 @@ export function DashboardPage() {
   const [selectedRow, setSelectedRow] = useState<BreakdownRow | null>(null)
 
   const combinedError = dashboardData.error || breakdownData.error
-  const is401 = combinedError?.includes(AUTH_ERROR_MSG) ?? false
+  const rawError = dashboardData.rawError || breakdownData.rawError
+  const is401 = rawError instanceof ApiError && rawError.statusCode === 401
 
   // Redirect to config on 401
   useEffect(() => {
@@ -76,7 +76,13 @@ export function DashboardPage() {
         />
 
         {combinedError && !is401 && (
-          <ErrorBanner message={combinedError} />
+          <ErrorBanner
+            message={combinedError}
+            onRetry={() => {
+              dashboardData.refetch()
+              breakdownData.refetch()
+            }}
+          />
         )}
 
         <FilterBar
