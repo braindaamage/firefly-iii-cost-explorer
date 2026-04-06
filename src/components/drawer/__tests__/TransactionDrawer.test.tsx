@@ -8,6 +8,12 @@ import type { BreakdownRow } from '../../../types/breakdown'
 import { DEFAULT_FILTERS } from '../../../types/filters'
 import type { Transaction } from '../../../api/types'
 
+vi.mock('../../../hooks/useBreakpoint', () => ({
+  useBreakpoint: vi.fn(() => 'desktop'),
+}))
+
+import { useBreakpoint } from '../../../hooks/useBreakpoint'
+
 const mockRow: BreakdownRow = {
   id: '1', name: 'Groceries', color: '#4285f4',
   actualCost: 500, budgeted: null, variance: null, percentChange: 10,
@@ -181,5 +187,22 @@ describe('TransactionDrawer', () => {
     })
     renderDrawer()
     expect(screen.getByRole('button', { name: /export csv/i })).toBeDisabled()
+  })
+
+  it('renders as full-screen panel on mobile', () => {
+    vi.mocked(useBreakpoint).mockReturnValueOnce('mobile')
+    const { container } = renderDrawer()
+    // The drawer panel should have width: 100% on mobile
+    const panel = container.querySelector('[data-testid="drawer-panel"]')
+    expect(panel).toBeTruthy()
+    expect(panel).toHaveStyle({ width: '100%' })
+  })
+
+  it('renders as side panel on desktop', () => {
+    vi.mocked(useBreakpoint).mockReturnValueOnce('desktop')
+    const { container } = renderDrawer()
+    const panel = container.querySelector('[data-testid="drawer-panel"]')
+    expect(panel).toBeTruthy()
+    expect(panel).toHaveStyle({ width: '480px' })
   })
 })

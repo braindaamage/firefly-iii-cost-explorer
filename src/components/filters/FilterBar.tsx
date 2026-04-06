@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useConfig } from '../../hooks/useConfig'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { fetchAssetAccounts } from '../../api/accounts'
 import { fetchCategories } from '../../api/categories'
 import { fetchBudgets } from '../../api/budgets'
@@ -174,6 +175,7 @@ export function FilterBar({
   availableOptionalFilters,
 }: FilterBarProps) {
   const { config } = useConfig()
+  const breakpoint = useBreakpoint()
 
   const [openChip, setOpenChip] = useState<ActiveChip>(null)
 
@@ -238,9 +240,10 @@ export function FilterBar({
         borderRadius: '8px',
         padding: '17px',
         display: 'flex',
-        alignItems: 'center',
+        alignItems: breakpoint === 'mobile' ? 'stretch' : 'center',
+        flexDirection: breakpoint === 'mobile' ? 'column' : 'row',
         gap: '12px',
-        flexWrap: 'wrap',
+        flexWrap: breakpoint === 'mobile' ? 'nowrap' : 'wrap',
       }}
     >
       <span

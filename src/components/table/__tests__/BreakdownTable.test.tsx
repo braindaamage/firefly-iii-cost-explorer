@@ -6,6 +6,12 @@ import type { BreakdownRow } from '../../../types/breakdown'
 import type { FilterState } from '../../../types/filters'
 import { DEFAULT_FILTERS } from '../../../types/filters'
 
+vi.mock('../../../hooks/useBreakpoint', () => ({
+  useBreakpoint: vi.fn(() => 'desktop'),
+}))
+
+import { useBreakpoint } from '../../../hooks/useBreakpoint'
+
 const mockRows: BreakdownRow[] = [
   { id: '1', name: 'Groceries', color: '#4285f4', actualCost: 500, budgeted: null, variance: null, percentChange: 10 },
   { id: '2', name: 'Transport', color: '#34a853', actualCost: 200, budgeted: null, variance: null, percentChange: -5 },
@@ -147,5 +153,62 @@ describe('BreakdownTable', () => {
     await userEvent.click(actualCostHeader)
     // After click, should show sorted indicator
     expect(screen.getByLabelText(/sorted/)).toBeInTheDocument()
+  })
+})
+
+describe('BreakdownTable — responsive', () => {
+  it('shows % Change column on desktop', () => {
+    vi.mocked(useBreakpoint).mockReturnValue('desktop')
+    render(<BreakdownTable {...defaultProps} />)
+    expect(screen.getByRole('columnheader', { name: /% change/i })).toBeInTheDocument()
+  })
+
+  it('hides % Change column on tablet', () => {
+    vi.mocked(useBreakpoint).mockReturnValue('tablet')
+    render(<BreakdownTable {...defaultProps} />)
+    expect(screen.queryByRole('columnheader', { name: /% change/i })).not.toBeInTheDocument()
+  })
+
+  it('hides % Change column on mobile', () => {
+    vi.mocked(useBreakpoint).mockReturnValue('mobile')
+    render(<BreakdownTable {...defaultProps} />)
+    expect(screen.queryByRole('columnheader', { name: /% change/i })).not.toBeInTheDocument()
+  })
+
+  it('shows expand chevron on mobile', () => {
+    vi.mocked(useBreakpoint).mockReturnValue('mobile')
+    render(<BreakdownTable {...defaultProps} />)
+    expect(screen.getAllByRole('button', { name: /expand/i }).length).toBeGreaterThan(0)
+  })
+
+  it('expands row details on chevron click in mobile', async () => {
+    vi.mocked(useBreakpoint).mockReturnValue('mobile')
+    render(
+      <BreakdownTable
+        {...defaultProps}
+        rows={[{ id: '1', name: 'Groceries', color: '#4285f4', actualCost: 500, budgeted: 400, variance: -100, percentChange: 10 }]}
+      />
+    )
+    const expandBtn = screen.getByRole('button', { name: /expand/i })
+    await userEvent.click(expandBtn)
+    // Expanded row shows extra columns
+    expect(screen.getByText('Budgeted')).toBeInTheDocument()
+    expect(screen.getByText('Variance')).toBeInTheDocument()
+    expect(screen.getByText('% Change')).toBeInTheDocument()
+  })
+
+  it('collapses row on second chevron click', async () => {
+    vi.mocked(useBreakpoint).mockReturnValue('mobile')
+    render(
+      <BreakdownTable
+        {...defaultProps}
+        rows={[{ id: '1', name: 'Groceries', color: '#4285f4', actualCost: 500, budgeted: 400, variance: -100, percentChange: 10 }]}
+      />
+    )
+    const expandBtn = screen.getByRole('button', { name: /expand/i })
+    await userEvent.click(expandBtn)
+    expect(screen.getByText('Budgeted')).toBeInTheDocument()
+    await userEvent.click(expandBtn)
+    expect(screen.queryByText('Budgeted')).not.toBeInTheDocument()
   })
 })

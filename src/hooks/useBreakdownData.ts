@@ -21,7 +21,10 @@ export interface BreakdownData {
   totals: BreakdownRow
   currencyCode: string
   isLoading: boolean
+  isFetching: boolean
   error: string | null
+  rawError: Error | null
+  refetch: () => void
 }
 
 function getFetchFn(groupBy: FilterState['groupBy']) {
@@ -171,14 +174,27 @@ export function useBreakdownData(filters: FilterState): BreakdownData {
     previousQuery.isLoading ||
     (filters.groupBy === 'budget' && budgetLimitsQuery.isLoading)
 
-  const error =
+  const isFetching =
+    currentQuery.isFetching ||
+    previousQuery.isFetching ||
+    (filters.groupBy === 'budget' && budgetLimitsQuery.isFetching)
+
+  const rawError =
     currentQuery.error instanceof Error
-      ? currentQuery.error.message
+      ? currentQuery.error
       : previousQuery.error instanceof Error
-        ? previousQuery.error.message
+        ? previousQuery.error
         : (filters.groupBy === 'budget' && budgetLimitsQuery.error instanceof Error)
-          ? budgetLimitsQuery.error.message
+          ? budgetLimitsQuery.error
           : null
+
+  const error = rawError ? rawError.message : null
+
+  function refetch() {
+    currentQuery.refetch()
+    previousQuery.refetch()
+    if (filters.groupBy === 'budget') budgetLimitsQuery.refetch()
+  }
 
   const { rows, totals, currencyCode } = useMemo(() => {
     const current = currentQuery.data ?? []
@@ -187,5 +203,5 @@ export function useBreakdownData(filters: FilterState): BreakdownData {
     return processBreakdown(current, previous, budgetLimits, filters.groupBy)
   }, [currentQuery.data, previousQuery.data, budgetLimitsQuery.data, filters.groupBy])
 
-  return { rows, totals, currencyCode, isLoading, error }
+  return { rows, totals, currencyCode, isLoading, isFetching, error, rawError, refetch }
 }

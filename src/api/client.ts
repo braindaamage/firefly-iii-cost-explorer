@@ -1,3 +1,12 @@
+export class ApiError extends Error {
+  statusCode: number
+  constructor(message: string, statusCode: number) {
+    super(message)
+    this.name = 'ApiError'
+    this.statusCode = statusCode
+  }
+}
+
 export function createApiClient(baseUrl: string, token: string) {
   const base = baseUrl.replace(/\/$/, '')
 
@@ -23,16 +32,17 @@ export function createApiClient(baseUrl: string, token: string) {
 
     if (!response.ok) {
       if (response.status === 401) {
-        throw new Error('Invalid API token. Please check your Personal Access Token.')
+        throw new ApiError('Invalid API token. Please check your Personal Access Token.', 401)
       }
       if (response.status === 403) {
-        throw new Error('Access forbidden. Check your token permissions.')
+        throw new ApiError('Access forbidden. Check your token permissions.', 403)
       }
       if (response.status === 404) {
-        throw new Error('API endpoint not found. Check your Base URL.')
+        throw new ApiError('API endpoint not found. Check your Base URL.', 404)
       }
-      throw new Error(
-        `Unexpected error: ${response.status} ${response.statusText}`
+      throw new ApiError(
+        `Unexpected error: ${response.status} ${response.statusText}`,
+        response.status
       )
     }
 

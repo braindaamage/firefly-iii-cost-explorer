@@ -50,9 +50,9 @@ function mockFetchError(status: number) {
   )
 }
 
-function renderConfigScreen() {
+function renderConfigScreen(initialPath = '/config') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[initialPath]}>
       <ConfigScreen />
     </MemoryRouter>
   )
@@ -234,6 +234,17 @@ describe('ConfigScreen', () => {
       )
     ).toBeInTheDocument()
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('shows auth error banner when ?error=auth is in the URL', () => {
+    renderConfigScreen('/config?error=auth')
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getByText(/session expired|token is invalid/i)).toBeInTheDocument()
+  })
+
+  it('does not show auth error banner without ?error=auth', () => {
+    renderConfigScreen()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('toggles API token visibility when eye button is clicked', async () => {

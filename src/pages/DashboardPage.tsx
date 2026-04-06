@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { ApiError } from '../api/client'
 import { Header } from '../components/layout/Header'
 import { PageHeader } from '../components/layout/PageHeader'
 import { FilterBar } from '../components/filters/FilterBar'
@@ -7,6 +9,7 @@ import { SpendingTrendChart } from '../components/chart/SpendingTrendChart'
 import { ChartLegend } from '../components/chart/ChartLegend'
 import { BreakdownTable } from '../components/table/BreakdownTable'
 import { TransactionDrawer } from '../components/drawer/TransactionDrawer'
+import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { useFilters } from '../hooks/useFilters'
 import { useDashboardData } from '../hooks/useDashboardData'
 import { useBreakdownData } from '../hooks/useBreakdownData'
@@ -15,6 +18,8 @@ import { exportChartAsPNG } from '../lib/chart-export'
 import type { BreakdownRow } from '../types/breakdown'
 
 export function DashboardPage() {
+  const navigate = useNavigate()
+
   const {
     filters,
     updateFilter,
@@ -28,6 +33,21 @@ export function DashboardPage() {
   const breakdownData = useBreakdownData(filters)
   const [showCumulative, setShowCumulative] = useState(false)
   const [selectedRow, setSelectedRow] = useState<BreakdownRow | null>(null)
+
+  const combinedError = dashboardData.error || breakdownData.error
+  const rawError = dashboardData.rawError || breakdownData.rawError
+  const is401 = rawError instanceof ApiError && rawError.statusCode === 401
+
+  // Redirect to config on 401
+  useEffect(() => {
+    if (is401) {
+      navigate('/config?error=auth')
+    }
+  }, [is401, navigate])
+
+  const isRefetching =
+    (dashboardData.isFetching && !dashboardData.isLoading) ||
+    (breakdownData.isFetching && !breakdownData.isLoading)
 
   function handleRowClick(row: BreakdownRow) {
     setSelectedRow(row)
@@ -54,6 +74,17 @@ export function DashboardPage() {
           title="Cost Explorer"
           subtitle="Analyze your spending trends and budget variance."
         />
+
+        {combinedError && !is401 && (
+          <ErrorBanner
+            message={combinedError}
+            onRetry={() => {
+              dashboardData.refetch()
+              breakdownData.refetch()
+            }}
+          />
+        )}
+
         <FilterBar
           filters={filters}
           updateFilter={updateFilter}
@@ -63,31 +94,60 @@ export function DashboardPage() {
           availableOptionalFilters={availableOptionalFilters}
         />
 
-        <div
-          style={{
-            backgroundColor: '#1e1e1e',
-            border: '1px solid #3c4043',
-            borderRadius: '8px',
-            padding: '21px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-          }}
-        >
-          <ChartHeader
-            showCumulative={showCumulative}
-            onToggleCumulative={() => setShowCumulative((prev) => !prev)}
-            onExportPNG={exportChartAsPNG}
-          />
-          <SpendingTrendChart
-            data={dashboardData.chartData}
-            series={dashboardData.series}
-            currencyCode={dashboardData.currencyCode}
-            isLoading={dashboardData.isLoading}
-            cumulative={showCumulative}
-          />
-          {!dashboardData.isLoading && dashboardData.series.length > 0 && (
-            <ChartLegend series={dashboardData.series} />
+        {/* Chart card with refetch overlay */}
+        <div style={{ position: 'relative' }}>
+          <div
+            style={{
+              backgroundColor: '#1e1e1e',
+              border: '1px solid #3c4043',
+              borderRadius: '8px',
+              padding: '21px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '16px',
+            }}
+          >
+            <ChartHeader
+              showCumulative={showCumulative}
+              onToggleCumulative={() => setShowCumulative((prev) => !prev)}
+              onExportPNG={exportChartAsPNG}
+            />
+            <SpendingTrendChart
+              data={dashboardData.chartData}
+              series={dashboardData.series}
+              currencyCode={dashboardData.currencyCode}
+              isLoading={dashboardData.isLoading}
+              cumulative={showCumulative}
+            />
+            {!dashboardData.isLoading && dashboardData.series.length > 0 && (
+              <ChartLegend series={dashboardData.series} />
+            )}
+          </div>
+          {isRefetching && (
+            <div
+              aria-label="Refreshing data"
+              style={{
+                position: 'absolute',
+                inset: 0,
+                borderRadius: '8px',
+                backgroundColor: 'rgba(0,0,0,0.3)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 10,
+              }}
+            >
+              <div
+                style={{
+                  width: '24px',
+                  height: '24px',
+                  border: '3px solid #8ab4f8',
+                  borderTopColor: 'transparent',
+                  borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite',
+                }}
+              />
+            </div>
           )}
         </div>
 

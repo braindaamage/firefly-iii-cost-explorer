@@ -1,6 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useTransactions } from '../../hooks/useTransactions'
 import { useConfig } from '../../hooks/useConfig'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { getEffectiveDateRange } from '../../lib/date-utils'
 import { formatCurrency, formatDate } from '../../lib/formatters'
 import { exportTransactionsCSV } from '../../lib/csv-export'
@@ -35,6 +36,8 @@ function SkeletonRows() {
 
 export function TransactionDrawer({ row, filters, onClose }: TransactionDrawerProps) {
   const { config } = useConfig()
+  const breakpoint = useBreakpoint()
+  const isMobile = breakpoint === 'mobile'
   const range = getEffectiveDateRange(filters)
 
   // B-1: animation-aware close — track open state separately from row presence
@@ -54,6 +57,15 @@ export function TransactionDrawer({ row, filters, onClose }: TransactionDrawerPr
       // currentRow is cleared in handleTransitionEnd after slide-out completes
     }
   }, [row])
+
+  const closeBtnRef = useRef<HTMLButtonElement>(null)
+
+  // B-2: focus close button on mobile when drawer opens
+  useEffect(() => {
+    if (isOpen && isMobile) {
+      closeBtnRef.current?.focus()
+    }
+  }, [isOpen, isMobile])
 
   // M-1: close on Escape key
   useEffect(() => {
@@ -84,28 +96,31 @@ export function TransactionDrawer({ row, filters, onClose }: TransactionDrawerPr
 
   return (
     <>
-      {/* Overlay */}
-      <div
-        data-testid="drawer-overlay"
-        onClick={onClose}
-        style={{
-          position: 'fixed',
-          inset: 0,
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          zIndex: 999,
-          opacity: isOpen ? 1 : 0,
-          transition: 'opacity 300ms ease',
-        }}
-      />
+      {/* Overlay — hidden on mobile (drawer is full-screen) */}
+      {!isMobile && (
+        <div
+          data-testid="drawer-overlay"
+          onClick={onClose}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            zIndex: 999,
+            opacity: isOpen ? 1 : 0,
+            transition: 'opacity 300ms ease',
+          }}
+        />
+      )}
 
       {/* Drawer panel */}
       <div
+        data-testid="drawer-panel"
         onTransitionEnd={handleTransitionEnd}
         style={{
           position: 'fixed',
           top: 0,
           right: 0,
-          width: '480px',
+          width: isMobile ? '100%' : '480px',
           height: '100vh',
           backgroundColor: '#1e1e1e',
           borderLeft: '1px solid #3c4043',
@@ -170,6 +185,7 @@ export function TransactionDrawer({ row, filters, onClose }: TransactionDrawerPr
                 Export CSV
               </button>
               <button
+                ref={closeBtnRef}
                 type="button"
                 onClick={onClose}
                 aria-label="Close drawer"
