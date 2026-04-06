@@ -25,8 +25,8 @@ export function DashboardPage() {
   const breakdownData = useBreakdownData(filters)
   const [showCumulative, setShowCumulative] = useState(false)
 
-  function handleRowClick(row: BreakdownRow) {
-    console.log('Row clicked:', row)
+  function handleRowClick(_row: BreakdownRow) {
+    // Drill-down will be implemented in Phase 5
   }
 
   return (

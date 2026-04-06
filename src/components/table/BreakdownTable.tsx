@@ -34,6 +34,7 @@ interface BreakdownTableProps {
 
 function VarianceCell({ value, currencyCode }: { value: number | null; currencyCode: string }) {
   if (value === null) return <span style={{ color: '#9aa0a6' }}>-</span>
+  if (value === 0) return <span style={{ color: '#9aa0a6' }}>{formatCurrency(0, currencyCode)}</span>
   const isOverBudget = value > 0
   const color = isOverBudget ? '#f28b82' : '#81c995'
   const prefix = isOverBudget ? '+' : '-'
@@ -124,8 +125,12 @@ export function BreakdownTable({
   const sorted = useMemo(() => {
     if (!sortDir) return rows
     return [...rows].sort((a, b) => {
-      const aVal = a[sortKey] ?? 0
-      const bVal = b[sortKey] ?? 0
+      const aVal = a[sortKey]
+      const bVal = b[sortKey]
+      // nulls always go to the end regardless of direction
+      if (aVal === null && bVal !== null) return 1
+      if (aVal !== null && bVal === null) return -1
+      if (aVal === null && bVal === null) return 0
       if (typeof aVal === 'string' && typeof bVal === 'string') {
         return sortDir === 'asc'
           ? aVal.localeCompare(bVal)

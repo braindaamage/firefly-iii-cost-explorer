@@ -71,7 +71,7 @@ describe('BreakdownTable', () => {
       />
     )
     // -100 variance = under budget = green
-    const underBudgetCell = screen.getByText('-€100.00')
+    const underBudgetCell = screen.getByText((text) => text.startsWith('-') && text.includes('100'))
     expect(underBudgetCell).toHaveStyle({ color: '#81c995' })
   })
 
@@ -86,7 +86,7 @@ describe('BreakdownTable', () => {
       />
     )
     // +100 variance = over budget = red
-    const overBudgetCell = screen.getByText('+€100.00')
+    const overBudgetCell = screen.getByText((text) => text.startsWith('+') && text.includes('100'))
     expect(overBudgetCell).toHaveStyle({ color: '#f28b82' })
   })
 

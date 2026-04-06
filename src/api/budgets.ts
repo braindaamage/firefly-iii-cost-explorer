@@ -16,8 +16,9 @@ export async function fetchBudgetLimits(
   end: string
 ): Promise<BudgetLimit[]> {
   const client = createApiClient(baseUrl, token)
+  const params = new URLSearchParams({ start, end })
   const response = await client.fetch<PaginatedResponse<BudgetLimitRaw>>(
-    `/budget-limits?start=${start}&end=${end}`
+    `/budget-limits?${params}`
   )
   return response.data.map((item) => ({
     id: item.id,

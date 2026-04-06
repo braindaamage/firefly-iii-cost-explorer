@@ -70,7 +70,7 @@ function processBreakdown(
   previous.forEach((e) => prevMap.set(e.name, Math.abs(e.difference_float)))
 
   let currencyCode = ''
-  const supportsbudget = groupBy === 'budget'
+  const supportsBudget = groupBy === 'budget'
 
   const rows: BreakdownRow[] = current.map((entry, i) => {
     if (entry.currency_code) currencyCode = entry.currency_code
@@ -85,7 +85,7 @@ function processBreakdown(
     let budgeted: number | null = null
     let variance: number | null = null
 
-    if (supportsbudget) {
+    if (supportsBudget) {
       const limit = budgetLimits.find((l) => l.budget_name === entry.name)
       if (limit) {
         budgeted = limit.amount
@@ -107,12 +107,15 @@ function processBreakdown(
   rows.sort((a, b) => b.actualCost - a.actualCost)
 
   const totalActual = rows.reduce((sum, r) => sum + r.actualCost, 0)
+  const rowsWithBudget = rows.filter((r) => r.budgeted !== null)
   const totalBudgeted =
-    rows.some((r) => r.budgeted !== null)
-      ? rows.reduce((sum, r) => sum + (r.budgeted ?? 0), 0)
+    rowsWithBudget.length > 0
+      ? rowsWithBudget.reduce((sum, r) => sum + r.budgeted!, 0)
       : null
   const totalVariance =
-    totalBudgeted !== null ? totalActual - totalBudgeted : null
+    totalBudgeted !== null
+      ? rowsWithBudget.reduce((sum, r) => sum + r.actualCost, 0) - totalBudgeted
+      : null
 
   const prevTotal = previous.reduce((sum, e) => sum + Math.abs(e.difference_float), 0)
   const totalPercentChange =
@@ -173,7 +176,9 @@ export function useBreakdownData(filters: FilterState): BreakdownData {
       ? currentQuery.error.message
       : previousQuery.error instanceof Error
         ? previousQuery.error.message
-        : null
+        : (filters.groupBy === 'budget' && budgetLimitsQuery.error instanceof Error)
+          ? budgetLimitsQuery.error.message
+          : null
 
   const { rows, totals, currencyCode } = useMemo(() => {
     const current = currentQuery.data ?? []
