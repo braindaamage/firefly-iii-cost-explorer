@@ -30,4 +30,23 @@ describe('ChartHeader', () => {
     await userEvent.click(screen.getByRole('switch'))
     expect(onToggle).toHaveBeenCalledOnce()
   })
+
+  it('renders three-dot menu button', () => {
+    render(<ChartHeader showCumulative={false} onToggleCumulative={vi.fn()} />)
+    expect(screen.getByRole('button', { name: /chart menu/i })).toBeInTheDocument()
+  })
+
+  it('opens dropdown with "Download as PNG" when menu button is clicked', async () => {
+    render(<ChartHeader showCumulative={false} onToggleCumulative={vi.fn()} onExportPNG={vi.fn()} />)
+    await userEvent.click(screen.getByRole('button', { name: /chart menu/i }))
+    expect(screen.getByText('Download as PNG')).toBeInTheDocument()
+  })
+
+  it('calls onExportPNG when "Download as PNG" is clicked', async () => {
+    const onExportPNG = vi.fn()
+    render(<ChartHeader showCumulative={false} onToggleCumulative={vi.fn()} onExportPNG={onExportPNG} />)
+    await userEvent.click(screen.getByRole('button', { name: /chart menu/i }))
+    await userEvent.click(screen.getByText('Download as PNG'))
+    expect(onExportPNG).toHaveBeenCalledOnce()
+  })
 })

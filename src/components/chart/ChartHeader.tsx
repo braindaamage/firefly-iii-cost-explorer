@@ -1,9 +1,16 @@
+import { useState, useRef } from 'react'
+import { FilterDropdown } from '../filters/FilterDropdown'
+
 interface ChartHeaderProps {
   showCumulative: boolean
   onToggleCumulative: () => void
+  onExportPNG?: () => void
 }
 
-export function ChartHeader({ showCumulative, onToggleCumulative }: ChartHeaderProps) {
+export function ChartHeader({ showCumulative, onToggleCumulative, onExportPNG }: ChartHeaderProps) {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
   return (
     <div
       style={{
@@ -77,7 +84,63 @@ export function ChartHeader({ showCumulative, onToggleCumulative }: ChartHeaderP
           </span>
         </label>
 
+        {/* Three-dot menu */}
+        <div ref={menuRef} style={{ position: 'relative' }}>
+          <button
+            type="button"
+            aria-label="Chart menu"
+            onClick={() => setMenuOpen((prev) => !prev)}
+            style={{
+              background: 'none',
+              border: 'none',
+              cursor: 'pointer',
+              color: '#9aa0a6',
+              padding: '4px',
+              display: 'flex',
+              alignItems: 'center',
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="5" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="12" cy="19" r="2" />
+            </svg>
+          </button>
 
+          <FilterDropdown open={menuOpen} onClose={() => setMenuOpen(false)} anchorRef={menuRef}>
+            <div
+              role="menuitem"
+              onClick={() => {
+                setMenuOpen(false)
+                onExportPNG?.()
+              }}
+              style={{
+                padding: '10px 16px',
+                cursor: 'pointer',
+                fontFamily: "'Roboto', sans-serif",
+                fontSize: '13px',
+                color: '#e8eaed',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+              onMouseEnter={(e) => {
+                ;(e.currentTarget as HTMLDivElement).style.backgroundColor = '#2d2d2d'
+              }}
+              onMouseLeave={(e) => {
+                ;(e.currentTarget as HTMLDivElement).style.backgroundColor = ''
+              }}
+            >
+              Download as PNG
+            </div>
+          </FilterDropdown>
+        </div>
       </div>
     </div>
   )

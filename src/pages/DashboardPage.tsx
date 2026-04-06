@@ -6,9 +6,12 @@ import { ChartHeader } from '../components/chart/ChartHeader'
 import { SpendingTrendChart } from '../components/chart/SpendingTrendChart'
 import { ChartLegend } from '../components/chart/ChartLegend'
 import { BreakdownTable } from '../components/table/BreakdownTable'
+import { TransactionDrawer } from '../components/drawer/TransactionDrawer'
 import { useFilters } from '../hooks/useFilters'
 import { useDashboardData } from '../hooks/useDashboardData'
 import { useBreakdownData } from '../hooks/useBreakdownData'
+import { exportBreakdownCSV } from '../lib/csv-export'
+import { exportChartAsPNG } from '../lib/chart-export'
 import type { BreakdownRow } from '../types/breakdown'
 
 export function DashboardPage() {
@@ -24,9 +27,14 @@ export function DashboardPage() {
   const dashboardData = useDashboardData(filters)
   const breakdownData = useBreakdownData(filters)
   const [showCumulative, setShowCumulative] = useState(false)
+  const [selectedRow, setSelectedRow] = useState<BreakdownRow | null>(null)
 
-  function handleRowClick(_row: BreakdownRow) {
-    // Drill-down will be implemented in Phase 5
+  function handleRowClick(row: BreakdownRow) {
+    setSelectedRow(row)
+  }
+
+  function handleExportBreakdownCSV() {
+    exportBreakdownCSV(breakdownData.rows, breakdownData.totals, filters.groupBy, breakdownData.currencyCode)
   }
 
   return (
@@ -69,6 +77,7 @@ export function DashboardPage() {
           <ChartHeader
             showCumulative={showCumulative}
             onToggleCumulative={() => setShowCumulative((prev) => !prev)}
+            onExportPNG={exportChartAsPNG}
           />
           <SpendingTrendChart
             data={dashboardData.chartData}
@@ -89,8 +98,15 @@ export function DashboardPage() {
           isLoading={breakdownData.isLoading}
           filters={filters}
           onRowClick={handleRowClick}
+          onExportCSV={handleExportBreakdownCSV}
         />
       </main>
+
+      <TransactionDrawer
+        row={selectedRow}
+        filters={filters}
+        onClose={() => setSelectedRow(null)}
+      />
     </div>
   )
 }

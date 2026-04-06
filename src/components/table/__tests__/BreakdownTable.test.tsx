@@ -27,6 +27,7 @@ const defaultProps = {
   isLoading: false,
   filters: DEFAULT_FILTERS,
   onRowClick: vi.fn(),
+  onExportCSV: vi.fn(),
 }
 
 describe('BreakdownTable', () => {
@@ -90,10 +91,13 @@ describe('BreakdownTable', () => {
     expect(overBudgetCell).toHaveStyle({ color: '#f28b82' })
   })
 
-  it('renders Export CSV button as disabled', () => {
-    render(<BreakdownTable {...defaultProps} />)
+  it('renders Export CSV button as enabled and calls onExportCSV on click', async () => {
+    const onExportCSV = vi.fn()
+    render(<BreakdownTable {...defaultProps} onExportCSV={onExportCSV} />)
     const btn = screen.getByRole('button', { name: /export csv/i })
-    expect(btn).toBeDisabled()
+    expect(btn).not.toBeDisabled()
+    await userEvent.click(btn)
+    expect(onExportCSV).toHaveBeenCalledOnce()
   })
 
   it('renders loading skeleton when isLoading is true', () => {

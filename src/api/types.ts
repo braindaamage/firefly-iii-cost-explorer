@@ -66,6 +66,41 @@ export interface BudgetLimit {
   currency_code: string
 }
 
+export interface TransactionJournalRaw {
+  transaction_journal_id: number
+  date: string
+  amount: string
+  description: string
+  source_name: string
+  destination_name: string
+  currency_code: string
+}
+
+export interface TransactionGroupRaw {
+  id: string
+  attributes: {
+    transactions: TransactionJournalRaw[]
+  }
+}
+
+export interface Transaction {
+  id: string
+  date: string
+  description: string
+  amount: number
+  currencyCode: string
+  sourceAccount: string
+  destinationAccount: string
+}
+
+export interface Pagination {
+  total: number
+  count: number
+  perPage: number
+  currentPage: number
+  totalPages: number
+}
+
 export interface AboutResponse {
   data: {
     version: string
