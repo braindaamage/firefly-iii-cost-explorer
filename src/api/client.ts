@@ -1,3 +1,5 @@
+import type { PaginatedResponse } from './types'
+
 export class ApiError extends Error {
   statusCode: number
   constructor(message: string, statusCode: number) {
@@ -63,5 +65,19 @@ export function createApiClient(baseUrl: string, token: string) {
     }
   }
 
-  return { fetch: apiFetch, testConnection }
+  async function fetchAllPages<TRaw>(endpoint: string): Promise<TRaw[]> {
+    const sep = endpoint.includes('?') ? '&' : '?'
+    const firstPage = await apiFetch<PaginatedResponse<TRaw>>(`${endpoint}${sep}page=1`)
+    const allData = [...firstPage.data]
+    const totalPages = firstPage.meta.pagination.total_pages
+
+    for (let page = 2; page <= totalPages; page++) {
+      const nextPage = await apiFetch<PaginatedResponse<TRaw>>(`${endpoint}${sep}page=${page}`)
+      allData.push(...nextPage.data)
+    }
+
+    return allData
+  }
+
+  return { fetch: apiFetch, fetchAllPages, testConnection }
 }

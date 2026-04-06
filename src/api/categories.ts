@@ -1,10 +1,11 @@
 import { createApiClient } from './client'
-import type { AutocompleteCategory } from './types'
+import type { CategoryRaw } from './types'
 
 export async function fetchCategories(
   baseUrl: string,
   token: string
-): Promise<AutocompleteCategory[]> {
+): Promise<{ id: string; name: string }[]> {
   const client = createApiClient(baseUrl, token)
-  return client.fetch<AutocompleteCategory[]>('/autocomplete/categories?limit=100')
+  const raw = await client.fetchAllPages<CategoryRaw>('/categories')
+  return raw.map((item) => ({ id: item.id, name: item.attributes.name }))
 }

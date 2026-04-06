@@ -11,32 +11,6 @@ export interface PaginatedResponse<T> {
   }
 }
 
-export interface AutocompleteAccount {
-  id: string
-  name: string
-  name_with_balance: string
-  type: string
-  currency_id: string
-  currency_code: string
-  currency_symbol: string
-  currency_decimal_places: number
-}
-
-export interface AutocompleteCategory {
-  id: string
-  name: string
-}
-
-export interface AutocompleteBudget {
-  id: string
-  name: string
-}
-
-export interface AutocompleteTag {
-  id: string
-  name: string
-  tag: string
-}
 
 export interface InsightEntry {
   id: string
@@ -46,6 +20,36 @@ export interface InsightEntry {
   currency_id: string
   currency_code: string
   currency_symbol: string
+}
+
+export interface CategoryRaw {
+  id: string
+  attributes: {
+    name: string
+  }
+}
+
+export interface AccountRaw {
+  id: string
+  attributes: {
+    name: string
+    type: string
+    currency_code: string
+  }
+}
+
+export interface BudgetRaw {
+  id: string
+  attributes: {
+    name: string
+  }
+}
+
+export interface TagRaw {
+  id: string
+  attributes: {
+    tag: string
+  }
 }
 
 export interface BudgetLimitRaw {

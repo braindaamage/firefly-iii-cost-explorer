@@ -1,10 +1,11 @@
 import { createApiClient } from './client'
-import type { AutocompleteTag } from './types'
+import type { TagRaw } from './types'
 
 export async function fetchTags(
   baseUrl: string,
   token: string
-): Promise<AutocompleteTag[]> {
+): Promise<{ id: string; name: string }[]> {
   const client = createApiClient(baseUrl, token)
-  return client.fetch<AutocompleteTag[]>('/autocomplete/tags?limit=100')
+  const raw = await client.fetchAllPages<TagRaw>('/tags')
+  return raw.map((item) => ({ id: item.id, name: item.attributes.tag }))
 }

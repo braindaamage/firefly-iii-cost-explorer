@@ -1,14 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { fetchBudgets, fetchBudgetLimits } from './budgets'
-import type { AutocompleteBudget } from './types'
+import type { BudgetRaw } from './types'
 
 const BASE_URL = 'https://firefly.example.com'
 const TOKEN = 'test-token'
 
-const mockBudgets: AutocompleteBudget[] = [
-  { id: '1', name: 'Monthly Food' },
-  { id: '2', name: 'Transport' },
-]
+function mockPaginatedResponse(data: BudgetRaw[], totalPages = 1) {
+  return {
+    data,
+    meta: { pagination: { total: data.length, count: data.length, per_page: 50, current_page: 1, total_pages: totalPages } },
+  }
+}
 
 function mockFetchOk(body: unknown) {
   vi.stubGlobal(
@@ -25,21 +27,47 @@ function mockFetchOk(body: unknown) {
 describe('fetchBudgets', () => {
   beforeEach(() => vi.restoreAllMocks())
 
-  it('calls correct URL', async () => {
-    mockFetchOk(mockBudgets)
+  it('calls /budgets endpoint (not autocomplete)', async () => {
+    mockFetchOk(mockPaginatedResponse([]))
     await fetchBudgets(BASE_URL, TOKEN)
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-      `${BASE_URL}/api/v1/autocomplete/budgets?limit=100`,
+      expect.stringContaining('/api/v1/budgets'),
       expect.objectContaining({
         headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }),
       })
     )
+    expect(vi.mocked(fetch)).not.toHaveBeenCalledWith(
+      expect.stringContaining('autocomplete'),
+      expect.anything()
+    )
   })
 
-  it('returns parsed budget list', async () => {
-    mockFetchOk(mockBudgets)
+  it('returns mapped { id, name } list', async () => {
+    const raw: BudgetRaw[] = [
+      { id: '1', attributes: { name: 'Monthly Food' } },
+      { id: '2', attributes: { name: 'Transport' } },
+    ]
+    mockFetchOk(mockPaginatedResponse(raw))
     const result = await fetchBudgets(BASE_URL, TOKEN)
-    expect(result).toEqual(mockBudgets)
+    expect(result).toEqual([
+      { id: '1', name: 'Monthly Food' },
+      { id: '2', name: 'Transport' },
+    ])
+  })
+
+  it('fetches all pages and returns combined results', async () => {
+    const page1Raw: BudgetRaw[] = [{ id: '1', attributes: { name: 'Monthly Food' } }]
+    const page2Raw: BudgetRaw[] = [{ id: '2', attributes: { name: 'Transport' } }]
+    const page1 = { data: page1Raw, meta: { pagination: { total: 2, count: 1, per_page: 1, current_page: 1, total_pages: 2 } } }
+    const page2 = { data: page2Raw, meta: { pagination: { total: 2, count: 1, per_page: 1, current_page: 2, total_pages: 2 } } }
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, statusText: 'OK', json: () => Promise.resolve(page1) })
+      .mockResolvedValueOnce({ ok: true, status: 200, statusText: 'OK', json: () => Promise.resolve(page2) })
+    )
+    const result = await fetchBudgets(BASE_URL, TOKEN)
+    expect(result).toHaveLength(2)
+    expect(result[0]).toEqual({ id: '1', name: 'Monthly Food' })
+    expect(result[1]).toEqual({ id: '2', name: 'Transport' })
   })
 })
 

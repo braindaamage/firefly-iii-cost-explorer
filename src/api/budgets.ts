@@ -1,12 +1,13 @@
 import { createApiClient } from './client'
-import type { AutocompleteBudget, BudgetLimit, BudgetLimitRaw, PaginatedResponse } from './types'
+import type { BudgetRaw, BudgetLimit, BudgetLimitRaw, PaginatedResponse } from './types'
 
 export async function fetchBudgets(
   baseUrl: string,
   token: string
-): Promise<AutocompleteBudget[]> {
+): Promise<{ id: string; name: string }[]> {
   const client = createApiClient(baseUrl, token)
-  return client.fetch<AutocompleteBudget[]>('/autocomplete/budgets?limit=100')
+  const raw = await client.fetchAllPages<BudgetRaw>('/budgets')
+  return raw.map((item) => ({ id: item.id, name: item.attributes.name }))
 }
 
 export async function fetchBudgetLimits(
