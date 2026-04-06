@@ -20,6 +20,7 @@ const mockRow: BreakdownRow = {
   name: 'Groceries',
   color: '#4285f4',
   values: { 'Jan 2026': 450, 'Feb 2026': 380, 'Mar 2026': 520 },
+  average: 450,
   total: 1350,
 }
 
@@ -226,7 +227,7 @@ describe('TransactionDrawer', () => {
     // Change row
     const newRow: BreakdownRow = {
       id: '2', name: 'Transport', color: '#34a853',
-      values: { 'Jan 2026': 120, 'Feb 2026': 90, 'Mar 2026': 150 }, total: 360,
+      values: { 'Jan 2026': 120, 'Feb 2026': 90, 'Mar 2026': 150 }, average: 120, total: 360,
     }
     rerender(
       <QueryClientProvider client={client}>

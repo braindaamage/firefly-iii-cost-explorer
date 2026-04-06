@@ -11,13 +11,13 @@ vi.mock('../../../hooks/useBreakpoint', () => ({
 const periods = ['Jan 2026', 'Feb 2026', 'Mar 2026']
 
 const rows: BreakdownRow[] = [
-  { id: '1', name: 'Groceries', color: '#4285f4', values: { 'Jan 2026': 450, 'Feb 2026': 380, 'Mar 2026': 520 }, total: 1350 },
-  { id: '2', name: 'Transport', color: '#34a853', values: { 'Jan 2026': 120, 'Feb 2026': 90, 'Mar 2026': 150 }, total: 360 },
+  { id: '1', name: 'Groceries', color: '#4285f4', values: { 'Jan 2026': 450, 'Feb 2026': 380, 'Mar 2026': 520 }, average: 450, total: 1350 },
+  { id: '2', name: 'Transport', color: '#34a853', values: { 'Jan 2026': 120, 'Feb 2026': 90, 'Mar 2026': 150 }, average: 120, total: 360 },
 ]
 
 const totals: BreakdownRow = {
   id: 'total', name: 'Total', color: '',
-  values: { 'Jan 2026': 570, 'Feb 2026': 470, 'Mar 2026': 670 }, total: 1710,
+  values: { 'Jan 2026': 570, 'Feb 2026': 470, 'Mar 2026': 670 }, average: 570, total: 1710,
 }
 
 const defaultProps = {
@@ -118,9 +118,31 @@ describe('BreakdownTable', () => {
     expect(footerRows.length).toBeGreaterThan(0)
   })
 
+  it('renders an Average column header between period columns and Total', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    expect(screen.getByRole('columnheader', { name: /average/i })).toBeInTheDocument()
+  })
+
+  it('Average column header appears before Total column header', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const headers = screen.getAllByRole('columnheader').map((th) => th.textContent ?? '')
+    const avgIdx = headers.findIndex((h) => /average/i.test(h))
+    const totalIdx = headers.findIndex((h) => /^total$/i.test(h))
+    expect(avgIdx).toBeGreaterThan(-1)
+    expect(avgIdx).toBeLessThan(totalIdx)
+  })
+
+  it('clicking Average column header sorts rows', async () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const avgHeader = screen.getByRole('columnheader', { name: /average/i })
+    await userEvent.click(avgHeader)
+    expect(screen.getByText('Groceries')).toBeInTheDocument()
+    expect(screen.getByText('Transport')).toBeInTheDocument()
+  })
+
   it('zero values render with muted color', () => {
     const rowsWithZero: BreakdownRow[] = [
-      { id: '1', name: 'Empty', color: '#fff', values: { 'Jan 2026': 0, 'Feb 2026': 0, 'Mar 2026': 0 }, total: 0 },
+      { id: '1', name: 'Empty', color: '#fff', values: { 'Jan 2026': 0, 'Feb 2026': 0, 'Mar 2026': 0 }, average: 0, total: 0 },
     ]
     render(<BreakdownTable {...defaultProps} rows={rowsWithZero} />)
     expect(screen.getByText('Empty')).toBeInTheDocument()

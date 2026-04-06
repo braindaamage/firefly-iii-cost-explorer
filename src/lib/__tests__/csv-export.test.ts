@@ -22,13 +22,13 @@ beforeEach(() => {
 const periods = ['Jan 2026', 'Feb 2026', 'Mar 2026']
 
 const mockRows: BreakdownRow[] = [
-  { id: '1', name: 'Groceries', color: '#4285f4', values: { 'Jan 2026': 450, 'Feb 2026': 380, 'Mar 2026': 520 }, total: 1350 },
-  { id: '2', name: 'Transport', color: '#34a853', values: { 'Jan 2026': 120, 'Feb 2026': 90, 'Mar 2026': 150 }, total: 360 },
+  { id: '1', name: 'Groceries', color: '#4285f4', values: { 'Jan 2026': 450, 'Feb 2026': 380, 'Mar 2026': 520 }, average: 450, total: 1350 },
+  { id: '2', name: 'Transport', color: '#34a853', values: { 'Jan 2026': 120, 'Feb 2026': 90, 'Mar 2026': 150 }, average: 120, total: 360 },
 ]
 
 const mockTotals: BreakdownRow = {
   id: 'total', name: 'Total', color: '',
-  values: { 'Jan 2026': 570, 'Feb 2026': 470, 'Mar 2026': 670 }, total: 1710,
+  values: { 'Jan 2026': 570, 'Feb 2026': 470, 'Mar 2026': 670 }, average: 570, total: 1710,
 }
 
 describe('exportBreakdownCSV', () => {
@@ -67,7 +67,7 @@ describe('exportBreakdownCSV', () => {
     expect(capturedContent).toContain('Budget')
   })
 
-  it('includes header row with period columns and Total', () => {
+  it('includes header row with period columns, Average, and Total', () => {
     let capturedContent = ''
     vi.stubGlobal('Blob', class MockBlob {
       content: string
@@ -80,7 +80,31 @@ describe('exportBreakdownCSV', () => {
     expect(capturedContent).toContain('Jan 2026')
     expect(capturedContent).toContain('Feb 2026')
     expect(capturedContent).toContain('Mar 2026')
+    expect(capturedContent).toContain('Average')
     expect(capturedContent).toContain('Total')
+  })
+
+  it('Average column appears before Total column in header', () => {
+    let capturedContent = ''
+    vi.stubGlobal('Blob', class MockBlob {
+      constructor(parts: BlobPart[]) { capturedContent = String(parts[0]) }
+    })
+    exportBreakdownCSV(mockRows, mockTotals, periods, 'category')
+    const headerLine = capturedContent.split('\r\n')[0]
+    const avgIdx = headerLine.indexOf('Average')
+    const totalIdx = headerLine.indexOf('Total')
+    expect(avgIdx).toBeGreaterThan(-1)
+    expect(avgIdx).toBeLessThan(totalIdx)
+  })
+
+  it('includes average value in each data row', () => {
+    let capturedContent = ''
+    vi.stubGlobal('Blob', class MockBlob {
+      constructor(parts: BlobPart[]) { capturedContent = String(parts[0]) }
+    })
+    exportBreakdownCSV(mockRows, mockTotals, periods, 'category')
+    // Groceries average = 450.00
+    expect(capturedContent).toContain('450.00')
   })
 
   it('includes row data with period values in CSV', () => {

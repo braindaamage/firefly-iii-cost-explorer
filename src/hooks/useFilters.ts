@@ -29,9 +29,11 @@ export function useFilters() {
     key: K,
     value: FilterState[K]
   ): void {
-    const updated = { ...filters, [key]: value }
-    setFilters(updated)
-    setStorageItem(FILTERS_KEY, updated)
+    setFilters((prev) => {
+      const updated = { ...prev, [key]: value }
+      setStorageItem(FILTERS_KEY, updated)
+      return updated
+    })
   }
 
   function resetFilters(): void {

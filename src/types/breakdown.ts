@@ -3,5 +3,6 @@ export interface BreakdownRow {
   name: string
   color: string
   values: Record<string, number>  // key = period label, value = amount
+  average: number
   total: number
 }

@@ -52,7 +52,7 @@ describe('DateRangeFilter', () => {
     expect(screen.getByLabelText('End date')).toBeInTheDocument()
   })
 
-  it('calls onSelectPreset("custom") AND onSelectCustomRange when Apply is clicked', async () => {
+  it('calls only onSelectCustomRange (not onSelectPreset) when Apply is clicked', async () => {
     const onSelectPreset = vi.fn()
     const onSelectCustomRange = vi.fn()
     const onClose = vi.fn()
@@ -70,7 +70,7 @@ describe('DateRangeFilter', () => {
     await userEvent.type(screen.getByLabelText('End date'), '2026-03-31')
     await userEvent.click(screen.getByRole('button', { name: /apply/i }))
 
-    expect(onSelectPreset).toHaveBeenCalledWith('custom')
+    expect(onSelectPreset).not.toHaveBeenCalled()
     expect(onSelectCustomRange).toHaveBeenCalledWith({
       start: '2026-01-01',
       end: '2026-03-31',

@@ -108,6 +108,18 @@ describe('useFilters', () => {
     expect(result.current.activeOptionalFilters).toContain('tagIds')
   })
 
+  it('multiple updateFilter calls in the same tick all apply (no stale closure)', () => {
+    const { result } = renderHook(() => useFilters())
+
+    act(() => {
+      result.current.updateFilter('timeRange', 'custom')
+      result.current.updateFilter('customDateRange', { start: '2026-01-01', end: '2026-03-31' })
+    })
+
+    expect(result.current.filters.timeRange).toBe('custom')
+    expect(result.current.filters.customDateRange).toEqual({ start: '2026-01-01', end: '2026-03-31' })
+  })
+
   it('resetFilters resets to DEFAULT_FILTERS and clears optional filters', () => {
     const { result } = renderHook(() => useFilters())
 

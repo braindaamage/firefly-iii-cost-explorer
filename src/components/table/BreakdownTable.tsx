@@ -22,7 +22,7 @@ const GROUP_COLUMN_LABEL: Record<GroupBy, string> = {
   asset_account: 'Asset Account',
 }
 
-type SortKey = 'name' | 'total' | string  // string covers period labels
+type SortKey = 'name' | 'average' | 'total' | string  // string covers period labels
 
 interface BreakdownTableProps {
   rows: BreakdownRow[]
@@ -102,6 +102,9 @@ export function BreakdownTable({
       if (sortKey === 'name') {
         aVal = a.name
         bVal = b.name
+      } else if (sortKey === 'average') {
+        aVal = a.average
+        bVal = b.average
       } else if (sortKey === 'total') {
         aVal = a.total
         bVal = b.total
@@ -199,7 +202,7 @@ export function BreakdownTable({
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: periods.length > 3 ? `${300 + periods.length * 120}px` : undefined }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: periods.length > 3 ? `${300 + (periods.length + 1) * 120}px` : undefined }}>
             <thead>
               <tr>
                 <th style={{ ...headerCellStyle, textAlign: 'left', ...stickyFirstCol }}>
@@ -218,6 +221,13 @@ export function BreakdownTable({
                     />
                   </th>
                 ))}
+                <th style={{ ...headerCellStyle, textAlign: 'right' }}>
+                  <SortableHeader
+                    label="Average"
+                    direction={dirFor('average')}
+                    onSort={handleSort('average')}
+                  />
+                </th>
                 <th style={{ ...headerCellStyle, textAlign: 'right' }}>
                   <SortableHeader
                     label="Total"
@@ -262,6 +272,9 @@ export function BreakdownTable({
                         <AmountCell value={row.values[period] ?? 0} currencyCode={currencyCode} />
                       </td>
                     ))}
+                    <td style={rightCell}>
+                      <AmountCell value={row.average} currencyCode={currencyCode} />
+                    </td>
                     <td style={{ ...rightCell, fontWeight: 500 }}>
                       <AmountCell value={row.total} currencyCode={currencyCode} />
                     </td>
@@ -284,6 +297,9 @@ export function BreakdownTable({
                     <AmountCell value={totals.values[period] ?? 0} currencyCode={currencyCode} />
                   </td>
                 ))}
+                <td style={{ ...rightCell, fontWeight: 500, fontSize: '16px' }}>
+                  <AmountCell value={totals.average} currencyCode={currencyCode} />
+                </td>
                 <td style={{ ...rightCell, fontWeight: 500, fontSize: '16px' }}>
                   <AmountCell value={totals.total} currencyCode={currencyCode} />
                 </td>
