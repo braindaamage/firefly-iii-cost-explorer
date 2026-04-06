@@ -1,73 +1,66 @@
-# React + TypeScript + Vite
+# Firefly III Cost Explorer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A React SPA for spending analysis that connects to your [Firefly III](https://www.firefly-iii.org/) personal finance instance.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Spending trend chart with configurable time ranges
+- Breakdown table by category, budget, tag, or account
+- Drill-down transaction drawer per group
+- CSV and PNG export
+- Responsive design (desktop, tablet, mobile)
+- Dark theme
 
-## React Compiler
+## Development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The dev server runs at `http://localhost:5173`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm test        # run tests
+npm run build   # production build
 ```
+
+## Docker Deployment
+
+### Quick Start
+
+```bash
+docker compose up -d
+```
+
+The app will be available at `http://localhost:8080`.
+
+### Manual Build
+
+```bash
+docker build -t cost-explorer .
+docker run -d -p 8080:8080 --name cost-explorer cost-explorer
+```
+
+### Configuration
+
+1. Open `http://localhost:8080` in your browser
+2. Enter your Firefly III instance URL (e.g., `https://firefly.example.com`)
+3. Enter your Personal Access Token
+4. Click "Test Connection" and then "Save & Continue"
+
+### CORS Configuration
+
+Since the app runs in the browser and connects directly to your Firefly III instance, you need to allow cross-origin requests. If you use **Nginx Proxy Manager**, add the following to the "Advanced" tab of your Firefly III proxy host:
+
+```nginx
+add_header Access-Control-Allow-Origin "http://cost-explorer-host:8080" always;
+add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+add_header Access-Control-Allow-Headers "Authorization, Accept, Content-Type" always;
+
+if ($request_method = OPTIONS) {
+    return 204;
+}
+```
+
+Replace `http://cost-explorer-host:8080` with the actual origin where the Cost Explorer is served.
