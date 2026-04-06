@@ -55,7 +55,7 @@ Since the app runs in the browser and connects directly to your Firefly III inst
 
 ```nginx
 add_header Access-Control-Allow-Origin "http://cost-explorer-host:8080" always;
-add_header Access-Control-Allow-Methods "GET, POST, OPTIONS" always;
+add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
 add_header Access-Control-Allow-Headers "Authorization, Accept, Content-Type" always;
 
 if ($request_method = OPTIONS) {
