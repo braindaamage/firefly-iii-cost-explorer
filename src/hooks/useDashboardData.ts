@@ -11,7 +11,7 @@ import {
   fetchInsightExpenseByExpenseAccount,
   fetchInsightExpenseByAssetAccount,
 } from '../api/insights'
-import type { FilterState } from '../types/filters'
+import type { FilterState, GranularityOption } from '../types/filters'
 import type { Period } from '../lib/period-utils'
 import type { InsightEntry } from '../api/types'
 
@@ -99,14 +99,14 @@ function processResults(
   return { chartData, series, currencyCode }
 }
 
-export function useDashboardData(filters: FilterState): DashboardData {
+export function useDashboardData(filters: FilterState, granularityOverride: GranularityOption = 'auto'): DashboardData {
   const { config } = useConfig()
   const enabled = !!config
   const baseUrl = config?.baseUrl ?? ''
   const token = config?.apiToken ?? ''
 
   const range = getEffectiveDateRange(filters)
-  const granularity = getGranularity(range)
+  const granularity = granularityOverride === 'auto' ? getGranularity(range) : granularityOverride
   const periods = splitIntoPeriods(range, granularity)
   const fetchFn = getFetchFn(filters.groupBy)
   const filterParams = buildFilterParams(filters)

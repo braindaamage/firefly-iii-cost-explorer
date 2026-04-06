@@ -116,4 +116,33 @@ describe('useDashboardData', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(vi.mocked(fetchInsightExpenseByBudget)).toHaveBeenCalled()
   })
+
+  it('with granularityOverride "month" returns monthly periods for last_30_days range', async () => {
+    // last_30_days would normally use 'week' granularity, but with 'month' override it uses month
+    const filters: FilterState = { ...DEFAULT_FILTERS, timeRange: 'last_30_days' }
+    const { result } = renderHook(() => useDashboardData(filters, 'month'), { wrapper })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    // All periods should be monthly (label format "MMM yyyy")
+    result.current.periods.forEach((p) => {
+      expect(p.label).toMatch(/^[A-Z][a-z]+ \d{4}$/)
+    })
+  })
+
+  it('with granularityOverride "day" returns daily periods', async () => {
+    const filters: FilterState = { ...DEFAULT_FILTERS, timeRange: 'last_7_days' }
+    const { result } = renderHook(() => useDashboardData(filters, 'day'), { wrapper })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    // All periods should be daily (label format "MMM d")
+    result.current.periods.forEach((p) => {
+      expect(p.label).toMatch(/^[A-Z][a-z]+ \d+$/)
+    })
+  })
+
+  it('with granularityOverride "auto" uses automatic granularity', async () => {
+    // last_7_days = 7 days, auto would pick 'day'
+    const filters: FilterState = { ...DEFAULT_FILTERS, timeRange: 'last_7_days' }
+    const { result } = renderHook(() => useDashboardData(filters, 'auto'), { wrapper })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(result.current.periods.length).toBeGreaterThan(0)
+  })
 })

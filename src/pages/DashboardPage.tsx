@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { Header } from '../components/layout/Header'
@@ -12,7 +12,8 @@ import { TransactionDrawer } from '../components/drawer/TransactionDrawer'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { useFilters } from '../hooks/useFilters'
 import { useDashboardData } from '../hooks/useDashboardData'
-import { useBreakdownData } from '../hooks/useBreakdownData'
+import { useGranularity } from '../hooks/useGranularity'
+import { transformToBreakdownRows } from '../lib/breakdown-transform'
 import { exportBreakdownCSV } from '../lib/csv-export'
 import { exportChartAsPNG } from '../lib/chart-export'
 import type { BreakdownRow } from '../types/breakdown'
@@ -29,32 +30,36 @@ export function DashboardPage() {
     availableOptionalFilters,
   } = useFilters()
 
-  const dashboardData = useDashboardData(filters)
-  const breakdownData = useBreakdownData(filters)
+  const { granularity, updateGranularity } = useGranularity()
+  const dashboardData = useDashboardData(filters, granularity)
   const [showCumulative, setShowCumulative] = useState(false)
   const [selectedRow, setSelectedRow] = useState<BreakdownRow | null>(null)
 
-  const combinedError = dashboardData.error || breakdownData.error
-  const rawError = dashboardData.rawError || breakdownData.rawError
+  const { rows, totals } = useMemo(
+    () => transformToBreakdownRows(dashboardData.chartData, dashboardData.series),
+    [dashboardData.chartData, dashboardData.series]
+  )
+
+  const periods = dashboardData.periods.map((p) => p.label)
+
+  const combinedError = dashboardData.error
+  const rawError = dashboardData.rawError
   const is401 = rawError instanceof ApiError && rawError.statusCode === 401
 
-  // Redirect to config on 401
   useEffect(() => {
     if (is401) {
       navigate('/config?error=auth')
     }
   }, [is401, navigate])
 
-  const isRefetching =
-    (dashboardData.isFetching && !dashboardData.isLoading) ||
-    (breakdownData.isFetching && !breakdownData.isLoading)
+  const isRefetching = dashboardData.isFetching && !dashboardData.isLoading
 
   function handleRowClick(row: BreakdownRow) {
     setSelectedRow(row)
   }
 
   function handleExportBreakdownCSV() {
-    exportBreakdownCSV(breakdownData.rows, breakdownData.totals, filters.groupBy)
+    exportBreakdownCSV(rows, totals, periods, filters.groupBy)
   }
 
   return (
@@ -78,10 +83,7 @@ export function DashboardPage() {
         {combinedError && !is401 && (
           <ErrorBanner
             message={combinedError}
-            onRetry={() => {
-              dashboardData.refetch()
-              breakdownData.refetch()
-            }}
+            onRetry={() => dashboardData.refetch()}
           />
         )}
 
@@ -111,6 +113,8 @@ export function DashboardPage() {
               showCumulative={showCumulative}
               onToggleCumulative={() => setShowCumulative((prev) => !prev)}
               onExportPNG={exportChartAsPNG}
+              granularity={granularity}
+              onGranularityChange={updateGranularity}
             />
             <SpendingTrendChart
               data={dashboardData.chartData}
@@ -152,11 +156,12 @@ export function DashboardPage() {
         </div>
 
         <BreakdownTable
-          rows={breakdownData.rows}
-          totals={breakdownData.totals}
-          currencyCode={breakdownData.currencyCode}
-          isLoading={breakdownData.isLoading}
-          filters={filters}
+          rows={rows}
+          totals={totals}
+          periods={periods}
+          currencyCode={dashboardData.currencyCode}
+          isLoading={dashboardData.isLoading}
+          groupBy={filters.groupBy}
           onRowClick={handleRowClick}
           onExportCSV={handleExportBreakdownCSV}
         />
@@ -164,7 +169,9 @@ export function DashboardPage() {
 
       <TransactionDrawer
         row={selectedRow}
+        periods={dashboardData.periods}
         filters={filters}
+        currencyCode={dashboardData.currencyCode}
         onClose={() => setSelectedRow(null)}
       />
     </div>

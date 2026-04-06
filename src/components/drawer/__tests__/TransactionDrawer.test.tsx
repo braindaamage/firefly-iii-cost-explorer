@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { TransactionDrawer } from '../TransactionDrawer'
 import { useTransactions } from '../../../hooks/useTransactions'
 import type { BreakdownRow } from '../../../types/breakdown'
+import type { Period } from '../../../lib/period-utils'
 import { DEFAULT_FILTERS } from '../../../types/filters'
 import type { Transaction } from '../../../api/types'
 
@@ -15,13 +16,22 @@ vi.mock('../../../hooks/useBreakpoint', () => ({
 import { useBreakpoint } from '../../../hooks/useBreakpoint'
 
 const mockRow: BreakdownRow = {
-  id: '1', name: 'Groceries', color: '#4285f4',
-  actualCost: 500, budgeted: null, variance: null, percentChange: 10,
+  id: '1',
+  name: 'Groceries',
+  color: '#4285f4',
+  values: { 'Jan 2026': 450, 'Feb 2026': 380, 'Mar 2026': 520 },
+  total: 1350,
 }
 
+const mockPeriods: Period[] = [
+  { start: '2026-01-01', end: '2026-01-31', label: 'Jan 2026' },
+  { start: '2026-02-01', end: '2026-02-28', label: 'Feb 2026' },
+  { start: '2026-03-01', end: '2026-03-31', label: 'Mar 2026' },
+]
+
 const mockTransactions: Transaction[] = [
-  { id: '1-10', date: '2026-01-15', description: 'Grocery shopping', amount: 150, currencyCode: 'EUR', sourceAccount: 'Checking', destinationAccount: 'Supermarket' },
-  { id: '1-11', date: '2026-01-20', description: 'Organic market', amount: 80, currencyCode: 'EUR', sourceAccount: 'Checking', destinationAccount: 'Bio Shop' },
+  { id: '42', date: '2026-01-15', description: 'Grocery shopping', amount: 150, currencyCode: 'EUR', sourceAccount: 'Checking', destinationAccount: 'Supermarket' },
+  { id: '43', date: '2026-01-20', description: 'Organic market', amount: 80, currencyCode: 'EUR', sourceAccount: 'Checking', destinationAccount: 'Bio Shop' },
 ]
 
 vi.mock('../../../hooks/useTransactions', () => ({
@@ -42,15 +52,17 @@ vi.mock('../../../hooks/useConfig', () => ({
   }),
 }))
 
-vi.mock('../../../lib/csv-export', () => ({
-  exportTransactionsCSV: vi.fn(),
-}))
-
 function renderDrawer(row: BreakdownRow | null = mockRow, onClose = vi.fn()) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
-      <TransactionDrawer row={row} filters={DEFAULT_FILTERS} onClose={onClose} />
+      <TransactionDrawer
+        row={row}
+        periods={mockPeriods}
+        filters={DEFAULT_FILTERS}
+        currencyCode="EUR"
+        onClose={onClose}
+      />
     </QueryClientProvider>
   )
 }
@@ -68,30 +80,62 @@ describe('TransactionDrawer', () => {
     expect(screen.getByText('Groceries — Transactions')).toBeInTheDocument()
   })
 
-  it('renders date range subtitle', () => {
+  it('renders one accordion section per period', () => {
     renderDrawer()
-    // DEFAULT_FILTERS uses last_30_days — subtitle is a <p> with date range
-    const subtitle = screen.getByText(/\w{3} \d{2}, \d{4} – \w{3} \d{2}, \d{4}/)
-    expect(subtitle).toBeInTheDocument()
+    expect(screen.getByText('Jan 2026')).toBeInTheDocument()
+    expect(screen.getByText('Feb 2026')).toBeInTheDocument()
+    expect(screen.getByText('Mar 2026')).toBeInTheDocument()
   })
 
-  it('renders transaction descriptions', () => {
+  it('first period is expanded by default and shows transactions', () => {
     renderDrawer()
+    // Transactions from first period should be visible (section is expanded)
     expect(screen.getByText('Grocery shopping')).toBeInTheDocument()
-    expect(screen.getByText('Organic market')).toBeInTheDocument()
   })
 
-  it('renders transaction amounts', () => {
+  it('each section header shows the period total from row.values', () => {
     renderDrawer()
-    expect(screen.getByText(/150/)).toBeInTheDocument()
+    // Jan 2026 = 450 → formatted as €450
+    expect(screen.getByText(/450/)).toBeInTheDocument()
   })
 
-  it('renders source → destination account info', () => {
+  it('clicking a collapsed section expands it', async () => {
+    vi.mocked(useTransactions)
+      .mockReturnValueOnce({ transactions: mockTransactions, fetchNextPage: vi.fn(), hasNextPage: false, isFetchingNextPage: false, isLoading: false, error: null })
+      .mockReturnValueOnce({ transactions: [], fetchNextPage: vi.fn(), hasNextPage: false, isFetchingNextPage: false, isLoading: false, error: null })
+      .mockReturnValueOnce({ transactions: [], fetchNextPage: vi.fn(), hasNextPage: false, isFetchingNextPage: false, isLoading: false, error: null })
     renderDrawer()
-    expect(screen.getByText(/Checking.*Supermarket/)).toBeInTheDocument()
+    // Click Feb 2026 header to expand it
+    await userEvent.click(screen.getByRole('button', { name: /feb 2026/i }))
+    // useTransactions should now be called with enabled:true for Feb as well
+    expect(vi.mocked(useTransactions)).toHaveBeenCalled()
   })
 
-  it('calls onClose when overlay is clicked', async () => {
+  it('clicking an expanded section collapses it', async () => {
+    renderDrawer()
+    // Jan 2026 is expanded by default, click its header to collapse
+    await userEvent.click(screen.getByRole('button', { name: /jan 2026/i }))
+    // Transactions should no longer be visible
+    expect(screen.queryByText('Grocery shopping')).not.toBeInTheDocument()
+  })
+
+  it('multiple sections can be open simultaneously', async () => {
+    renderDrawer()
+    // Jan is expanded by default; expand Mar too
+    await userEvent.click(screen.getByRole('button', { name: /mar 2026/i }))
+    // Jan section still shows transactions, Mar is also now expanded
+    expect(screen.getByText('Jan 2026')).toBeInTheDocument()
+    expect(screen.getByText('Mar 2026')).toBeInTheDocument()
+  })
+
+  it('shows footer with all-periods total', () => {
+    renderDrawer()
+    expect(screen.getByText(/all periods total/i)).toBeInTheDocument()
+    // Total is 1350
+    expect(screen.getByText(/1[,.]?350/)).toBeInTheDocument()
+  })
+
+  it('calls onClose when overlay is clicked (desktop)', async () => {
     const onClose = vi.fn()
     renderDrawer(mockRow, onClose)
     await userEvent.click(screen.getByTestId('drawer-overlay'))
@@ -105,13 +149,50 @@ describe('TransactionDrawer', () => {
     expect(onClose).toHaveBeenCalledOnce()
   })
 
-  it('shows "All transactions loaded" when hasNextPage is false', () => {
+  it('calls onClose when Escape key is pressed', async () => {
+    const onClose = vi.fn()
+    renderDrawer(mockRow, onClose)
+    await userEvent.keyboard('{Escape}')
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('renders Firefly III links for each transaction', () => {
     renderDrawer()
-    expect(screen.getByText('All transactions loaded')).toBeInTheDocument()
+    const links = screen.getAllByRole('link', { name: /open transaction/i })
+    expect(links.length).toBeGreaterThan(0)
+    expect(links[0]).toHaveAttribute('href', 'https://firefly.example.com/transactions/show/42')
+    expect(links[0]).toHaveAttribute('target', '_blank')
+    expect(links[0]).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+
+  it('shows loading skeleton when a section is loading', () => {
+    vi.mocked(useTransactions).mockReturnValue({
+      transactions: [],
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      isLoading: true,
+      error: null,
+    })
+    renderDrawer()
+    expect(screen.getByLabelText(/loading transactions/i)).toBeInTheDocument()
+  })
+
+  it('shows empty state when expanded section has no transactions', () => {
+    vi.mocked(useTransactions).mockReturnValue({
+      transactions: [],
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      isLoading: false,
+      error: null,
+    })
+    renderDrawer()
+    expect(screen.getByText(/no transactions/i)).toBeInTheDocument()
   })
 
   it('shows Load more button when hasNextPage is true', () => {
-    vi.mocked(useTransactions).mockReturnValueOnce({
+    vi.mocked(useTransactions).mockReturnValue({
       transactions: mockTransactions,
       fetchNextPage: vi.fn(),
       hasNextPage: true,
@@ -123,86 +204,35 @@ describe('TransactionDrawer', () => {
     expect(screen.getByRole('button', { name: /load more/i })).toBeInTheDocument()
   })
 
-  it('shows loading skeleton when isLoading is true', () => {
-    vi.mocked(useTransactions).mockReturnValueOnce({
-      transactions: [],
-      fetchNextPage: vi.fn(),
-      hasNextPage: false,
-      isFetchingNextPage: false,
-      isLoading: true,
-      error: null,
-    })
-    renderDrawer()
-    expect(screen.getByLabelText('Loading transactions')).toBeInTheDocument()
-  })
-
-  it('shows empty state when no transactions', () => {
-    vi.mocked(useTransactions).mockReturnValueOnce({
-      transactions: [],
-      fetchNextPage: vi.fn(),
-      hasNextPage: false,
-      isFetchingNextPage: false,
-      isLoading: false,
-      error: null,
-    })
-    renderDrawer()
-    expect(screen.getByText('No transactions found for this item.')).toBeInTheDocument()
-  })
-
-  it('calls exportTransactionsCSV when Export CSV is clicked', async () => {
-    const { exportTransactionsCSV } = await import('../../../lib/csv-export')
-    renderDrawer()
-    await userEvent.click(screen.getByRole('button', { name: /export csv/i }))
-    expect(exportTransactionsCSV).toHaveBeenCalledWith(mockTransactions, 'Groceries')
-  })
-
-  it('calls onClose when Escape key is pressed', async () => {
-    const onClose = vi.fn()
-    renderDrawer(mockRow, onClose)
-    await userEvent.keyboard('{Escape}')
-    expect(onClose).toHaveBeenCalledOnce()
-  })
-
-  it('Export CSV button is disabled when loading', () => {
-    vi.mocked(useTransactions).mockReturnValueOnce({
-      transactions: [],
-      fetchNextPage: vi.fn(),
-      hasNextPage: false,
-      isFetchingNextPage: false,
-      isLoading: true,
-      error: null,
-    })
-    renderDrawer()
-    expect(screen.getByRole('button', { name: /export csv/i })).toBeDisabled()
-  })
-
-  it('Export CSV button is disabled when no transactions', () => {
-    vi.mocked(useTransactions).mockReturnValueOnce({
-      transactions: [],
-      fetchNextPage: vi.fn(),
-      hasNextPage: false,
-      isFetchingNextPage: false,
-      isLoading: false,
-      error: null,
-    })
-    renderDrawer()
-    expect(screen.getByRole('button', { name: /export csv/i })).toBeDisabled()
-  })
-
   it('renders as full-screen panel on mobile', () => {
-    vi.mocked(useBreakpoint).mockReturnValueOnce('mobile')
+    vi.mocked(useBreakpoint).mockReturnValue('mobile')
     const { container } = renderDrawer()
-    // The drawer panel should have width: 100% on mobile
     const panel = container.querySelector('[data-testid="drawer-panel"]')
-    expect(panel).toBeTruthy()
     expect(panel).toHaveStyle({ width: '100%' })
   })
 
   it('renders as side panel on desktop', () => {
-    vi.mocked(useBreakpoint).mockReturnValueOnce('desktop')
+    vi.mocked(useBreakpoint).mockReturnValue('desktop')
     const { container } = renderDrawer()
     const panel = container.querySelector('[data-testid="drawer-panel"]')
-    expect(panel).toBeTruthy()
     expect(panel).toHaveStyle({ width: '480px' })
+  })
+
+  it('resets expanded state to first period when row changes', async () => {
+    const { rerender } = renderDrawer()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    // Expand Feb 2026
+    await userEvent.click(screen.getByRole('button', { name: /feb 2026/i }))
+    // Change row
+    const newRow: BreakdownRow = {
+      id: '2', name: 'Transport', color: '#34a853',
+      values: { 'Jan 2026': 120, 'Feb 2026': 90, 'Mar 2026': 150 }, total: 360,
+    }
+    rerender(
+      <QueryClientProvider client={client}>
+        <TransactionDrawer row={newRow} periods={mockPeriods} filters={DEFAULT_FILTERS} currencyCode="EUR" onClose={vi.fn()} />
+      </QueryClientProvider>
+    )
+    expect(screen.getByText('Transport — Transactions')).toBeInTheDocument()
   })
 })

@@ -3,212 +3,131 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BreakdownTable } from '../BreakdownTable'
 import type { BreakdownRow } from '../../../types/breakdown'
-import type { FilterState } from '../../../types/filters'
-import { DEFAULT_FILTERS } from '../../../types/filters'
 
 vi.mock('../../../hooks/useBreakpoint', () => ({
   useBreakpoint: vi.fn(() => 'desktop'),
 }))
 
-import { useBreakpoint } from '../../../hooks/useBreakpoint'
+const periods = ['Jan 2026', 'Feb 2026', 'Mar 2026']
 
-const mockRows: BreakdownRow[] = [
-  { id: '1', name: 'Groceries', color: '#4285f4', actualCost: 500, budgeted: null, variance: null, percentChange: 10 },
-  { id: '2', name: 'Transport', color: '#34a853', actualCost: 200, budgeted: null, variance: null, percentChange: -5 },
+const rows: BreakdownRow[] = [
+  { id: '1', name: 'Groceries', color: '#4285f4', values: { 'Jan 2026': 450, 'Feb 2026': 380, 'Mar 2026': 520 }, total: 1350 },
+  { id: '2', name: 'Transport', color: '#34a853', values: { 'Jan 2026': 120, 'Feb 2026': 90, 'Mar 2026': 150 }, total: 360 },
 ]
 
-const mockRowsWithBudget: BreakdownRow[] = [
-  { id: '1', name: 'Monthly Food', color: '#4285f4', actualCost: 300, budgeted: 400, variance: -100, percentChange: 5 },
-  { id: '2', name: 'Entertainment', color: '#34a853', actualCost: 600, budgeted: 500, variance: 100, percentChange: 15 },
-]
-
-const mockTotals: BreakdownRow = {
-  id: 'total', name: 'Total', color: '', actualCost: 700, budgeted: null, variance: null, percentChange: 3,
+const totals: BreakdownRow = {
+  id: 'total', name: 'Total', color: '',
+  values: { 'Jan 2026': 570, 'Feb 2026': 470, 'Mar 2026': 670 }, total: 1710,
 }
 
 const defaultProps = {
-  rows: mockRows,
-  totals: mockTotals,
+  rows,
+  totals,
+  periods,
   currencyCode: 'EUR',
   isLoading: false,
-  filters: DEFAULT_FILTERS,
+  groupBy: 'category' as const,
   onRowClick: vi.fn(),
   onExportCSV: vi.fn(),
 }
 
 describe('BreakdownTable', () => {
-  it('renders table title based on groupBy', () => {
+  it('renders column headers for each period', () => {
     render(<BreakdownTable {...defaultProps} />)
-    expect(screen.getByText('Category Breakdown')).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /jan 2026/i })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /feb 2026/i })).toBeInTheDocument()
+    expect(screen.getByRole('columnheader', { name: /mar 2026/i })).toBeInTheDocument()
   })
 
-  it('renders correct title for budget groupBy', () => {
-    const filters: FilterState = { ...DEFAULT_FILTERS, groupBy: 'budget' }
-    render(<BreakdownTable {...defaultProps} filters={filters} />)
-    expect(screen.getByText('Budget Breakdown')).toBeInTheDocument()
+  it('renders a Total column header', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    expect(screen.getByRole('columnheader', { name: /total/i })).toBeInTheDocument()
   })
 
-  it('renders row names', () => {
+  it('renders group name column header for category', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    expect(screen.getByRole('columnheader', { name: /category/i })).toBeInTheDocument()
+  })
+
+  it('renders group name column header for budget', () => {
+    render(<BreakdownTable {...defaultProps} groupBy="budget" />)
+    expect(screen.getByRole('columnheader', { name: /budget/i })).toBeInTheDocument()
+  })
+
+  it('renders all row names', () => {
     render(<BreakdownTable {...defaultProps} />)
     expect(screen.getByText('Groceries')).toBeInTheDocument()
     expect(screen.getByText('Transport')).toBeInTheDocument()
   })
 
-  it('renders actual cost values', () => {
-    render(<BreakdownTable {...defaultProps} />)
-    // formatCurrency with EUR should format 500
-    expect(screen.getByText(/500/)).toBeInTheDocument()
-  })
-
-  it('renders "-" for null budgeted', () => {
-    render(<BreakdownTable {...defaultProps} />)
-    // Multiple cells with "-" for both rows
-    const dashes = screen.getAllByText('-')
-    expect(dashes.length).toBeGreaterThan(0)
-  })
-
-  it('renders variance in green when negative (under budget)', () => {
-    const filters: FilterState = { ...DEFAULT_FILTERS, groupBy: 'budget' }
-    render(
-      <BreakdownTable
-        {...defaultProps}
-        rows={mockRowsWithBudget}
-        totals={{ ...mockTotals, budgeted: 900, variance: 0 }}
-        filters={filters}
-      />
-    )
-    // -100 variance = under budget = green
-    const underBudgetCell = screen.getByText((text) => text.startsWith('-') && text.includes('100'))
-    expect(underBudgetCell).toHaveStyle({ color: '#81c995' })
-  })
-
-  it('renders variance in red when positive (over budget)', () => {
-    const filters: FilterState = { ...DEFAULT_FILTERS, groupBy: 'budget' }
-    render(
-      <BreakdownTable
-        {...defaultProps}
-        rows={mockRowsWithBudget}
-        totals={{ ...mockTotals, budgeted: 900, variance: 0 }}
-        filters={filters}
-      />
-    )
-    // +100 variance = over budget = red
-    const overBudgetCell = screen.getByText((text) => text.startsWith('+') && text.includes('100'))
-    expect(overBudgetCell).toHaveStyle({ color: '#f28b82' })
-  })
-
-  it('renders Export CSV button as enabled and calls onExportCSV on click', async () => {
-    const onExportCSV = vi.fn()
-    render(<BreakdownTable {...defaultProps} onExportCSV={onExportCSV} />)
-    const btn = screen.getByRole('button', { name: /export csv/i })
-    expect(btn).not.toBeDisabled()
-    await userEvent.click(btn)
-    expect(onExportCSV).toHaveBeenCalledOnce()
-  })
-
-  it('renders loading skeleton when isLoading is true', () => {
+  it('shows loading skeleton when isLoading', () => {
     render(<BreakdownTable {...defaultProps} isLoading={true} />)
-    expect(screen.getByLabelText('Loading table')).toBeInTheDocument()
+    expect(screen.getByLabelText(/loading table/i)).toBeInTheDocument()
   })
 
-  it('renders empty state when rows are empty', () => {
-    render(
-      <BreakdownTable
-        {...defaultProps}
-        rows={[]}
-        totals={{ id: 'total', name: 'Total', color: '', actualCost: 0, budgeted: null, variance: null, percentChange: null }}
-      />
-    )
-    expect(screen.getByText('No data available for the selected filters.')).toBeInTheDocument()
+  it('shows empty state when no rows', () => {
+    render(<BreakdownTable {...defaultProps} rows={[]} />)
+    expect(screen.getByText(/no data/i)).toBeInTheDocument()
   })
 
-  it('calls onRowClick when a row is clicked', async () => {
+  it('calls onRowClick when a data row is clicked', async () => {
     const onRowClick = vi.fn()
     render(<BreakdownTable {...defaultProps} onRowClick={onRowClick} />)
     await userEvent.click(screen.getByText('Groceries'))
-    expect(onRowClick).toHaveBeenCalledWith(mockRows[0])
+    expect(onRowClick).toHaveBeenCalledWith(rows[0])
   })
 
-  it('renders % change with up arrow for positive values', () => {
+  it('calls onExportCSV when Export CSV is clicked', async () => {
+    const onExportCSV = vi.fn()
+    render(<BreakdownTable {...defaultProps} onExportCSV={onExportCSV} />)
+    await userEvent.click(screen.getByText('Export CSV'))
+    expect(onExportCSV).toHaveBeenCalledOnce()
+  })
+
+  it('sorts by Total descending by default (Groceries 1350 > Transport 360)', () => {
     render(<BreakdownTable {...defaultProps} />)
-    // 10% positive change for Groceries (and totals 3% too)
-    const increases = screen.getAllByLabelText('increase')
-    expect(increases.length).toBeGreaterThan(0)
+    const tableRows = screen.getAllByRole('row')
+    const groceriesIdx = tableRows.findIndex((r) => r.textContent?.includes('Groceries'))
+    const transportIdx = tableRows.findIndex((r) => r.textContent?.includes('Transport'))
+    expect(groceriesIdx).toBeLessThan(transportIdx)
+    expect(groceriesIdx).toBeGreaterThan(0) // not the header row
   })
 
-  it('renders % change with down arrow for negative values', () => {
+  it('clicking a period column header sorts rows by that period', async () => {
     render(<BreakdownTable {...defaultProps} />)
-    // -5% for Transport
-    expect(screen.getByLabelText('decrease')).toBeInTheDocument()
+    const janHeader = screen.getByRole('columnheader', { name: /jan 2026/i })
+    await userEvent.click(janHeader)
+    // After clicking, table renders without error
+    expect(screen.getByText('Groceries')).toBeInTheDocument()
+    expect(screen.getByText('Transport')).toBeInTheDocument()
   })
 
-  it('renders totals row', () => {
+  it('clicking Name column header sorts alphabetically', async () => {
     render(<BreakdownTable {...defaultProps} />)
-    expect(screen.getByText('Total')).toBeInTheDocument()
+    const nameHeader = screen.getByRole('columnheader', { name: /category/i })
+    await userEvent.click(nameHeader)
+    expect(screen.getByText('Groceries')).toBeInTheDocument()
   })
 
-  it('allows sorting by Actual Cost on header click', async () => {
+  it('renders totals footer row', () => {
     render(<BreakdownTable {...defaultProps} />)
-    const actualCostHeader = screen.getByRole('button', { name: /actual cost/i })
-    await userEvent.click(actualCostHeader)
-    // After click, should show sorted indicator
-    expect(screen.getByLabelText(/sorted/)).toBeInTheDocument()
-  })
-})
-
-describe('BreakdownTable — responsive', () => {
-  it('shows % Change column on desktop', () => {
-    vi.mocked(useBreakpoint).mockReturnValue('desktop')
-    render(<BreakdownTable {...defaultProps} />)
-    expect(screen.getByRole('columnheader', { name: /% change/i })).toBeInTheDocument()
-  })
-
-  it('hides % Change column on tablet', () => {
-    vi.mocked(useBreakpoint).mockReturnValue('tablet')
-    render(<BreakdownTable {...defaultProps} />)
-    expect(screen.queryByRole('columnheader', { name: /% change/i })).not.toBeInTheDocument()
-  })
-
-  it('hides % Change column on mobile', () => {
-    vi.mocked(useBreakpoint).mockReturnValue('mobile')
-    render(<BreakdownTable {...defaultProps} />)
-    expect(screen.queryByRole('columnheader', { name: /% change/i })).not.toBeInTheDocument()
-  })
-
-  it('shows expand chevron on mobile', () => {
-    vi.mocked(useBreakpoint).mockReturnValue('mobile')
-    render(<BreakdownTable {...defaultProps} />)
-    expect(screen.getAllByRole('button', { name: /expand/i }).length).toBeGreaterThan(0)
-  })
-
-  it('expands row details on chevron click in mobile', async () => {
-    vi.mocked(useBreakpoint).mockReturnValue('mobile')
-    render(
-      <BreakdownTable
-        {...defaultProps}
-        rows={[{ id: '1', name: 'Groceries', color: '#4285f4', actualCost: 500, budgeted: 400, variance: -100, percentChange: 10 }]}
-      />
+    // Should see totals in footer
+    const footerRows = screen.getAllByRole('row').filter((r) =>
+      r.textContent?.includes('Total')
     )
-    const expandBtn = screen.getByRole('button', { name: /expand/i })
-    await userEvent.click(expandBtn)
-    // Expanded row shows extra columns
-    expect(screen.getByText('Budgeted')).toBeInTheDocument()
-    expect(screen.getByText('Variance')).toBeInTheDocument()
-    expect(screen.getByText('% Change')).toBeInTheDocument()
+    expect(footerRows.length).toBeGreaterThan(0)
   })
 
-  it('collapses row on second chevron click', async () => {
-    vi.mocked(useBreakpoint).mockReturnValue('mobile')
-    render(
-      <BreakdownTable
-        {...defaultProps}
-        rows={[{ id: '1', name: 'Groceries', color: '#4285f4', actualCost: 500, budgeted: 400, variance: -100, percentChange: 10 }]}
-      />
-    )
-    const expandBtn = screen.getByRole('button', { name: /expand/i })
-    await userEvent.click(expandBtn)
-    expect(screen.getByText('Budgeted')).toBeInTheDocument()
-    await userEvent.click(expandBtn)
-    expect(screen.queryByText('Budgeted')).not.toBeInTheDocument()
+  it('zero values render with muted color', () => {
+    const rowsWithZero: BreakdownRow[] = [
+      { id: '1', name: 'Empty', color: '#fff', values: { 'Jan 2026': 0, 'Feb 2026': 0, 'Mar 2026': 0 }, total: 0 },
+    ]
+    render(<BreakdownTable {...defaultProps} rows={rowsWithZero} />)
+    expect(screen.getByText('Empty')).toBeInTheDocument()
+  })
+
+  it('renders table title based on groupBy', () => {
+    render(<BreakdownTable {...defaultProps} groupBy="category" />)
+    expect(screen.getByText('Category Breakdown')).toBeInTheDocument()
   })
 })

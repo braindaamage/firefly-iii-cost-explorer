@@ -52,7 +52,6 @@ vi.mock('../../api/transactions', () => ({
 
 vi.mock('../../lib/csv-export', () => ({
   exportBreakdownCSV: vi.fn(),
-  exportTransactionsCSV: vi.fn(),
 }))
 
 vi.mock('../../lib/chart-export', () => ({
