@@ -34,7 +34,7 @@ export function DashboardPage() {
   }
 
   function handleExportBreakdownCSV() {
-    exportBreakdownCSV(breakdownData.rows, breakdownData.totals, filters.groupBy, breakdownData.currencyCode)
+    exportBreakdownCSV(breakdownData.rows, breakdownData.totals, filters.groupBy)
   }
 
   return (

@@ -149,4 +149,37 @@ describe('TransactionDrawer', () => {
     await userEvent.click(screen.getByRole('button', { name: /export csv/i }))
     expect(exportTransactionsCSV).toHaveBeenCalledWith(mockTransactions, 'Groceries')
   })
+
+  it('calls onClose when Escape key is pressed', async () => {
+    const onClose = vi.fn()
+    renderDrawer(mockRow, onClose)
+    await userEvent.keyboard('{Escape}')
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('Export CSV button is disabled when loading', () => {
+    vi.mocked(useTransactions).mockReturnValueOnce({
+      transactions: [],
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      isLoading: true,
+      error: null,
+    })
+    renderDrawer()
+    expect(screen.getByRole('button', { name: /export csv/i })).toBeDisabled()
+  })
+
+  it('Export CSV button is disabled when no transactions', () => {
+    vi.mocked(useTransactions).mockReturnValueOnce({
+      transactions: [],
+      fetchNextPage: vi.fn(),
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      isLoading: false,
+      error: null,
+    })
+    renderDrawer()
+    expect(screen.getByRole('button', { name: /export csv/i })).toBeDisabled()
+  })
 })

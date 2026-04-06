@@ -36,14 +36,14 @@ const mockTransactions: Transaction[] = [
 
 describe('exportBreakdownCSV', () => {
   it('triggers a download', () => {
-    exportBreakdownCSV(mockRows, mockTotals, 'category', 'EUR')
+    exportBreakdownCSV(mockRows, mockTotals, 'category')
     expect(mockClick).toHaveBeenCalledOnce()
   })
 
   it('filename includes groupBy and date', () => {
     const mockAnchor = { href: '', download: '', click: mockClick }
     vi.spyOn(document, 'createElement').mockImplementation(() => mockAnchor as unknown as HTMLAnchorElement)
-    exportBreakdownCSV(mockRows, mockTotals, 'budget', 'EUR')
+    exportBreakdownCSV(mockRows, mockTotals, 'budget')
     expect(mockAnchor.download).toMatch(/cost-explorer-breakdown-budget-\d{4}-\d{2}-\d{2}\.csv/)
   })
 
@@ -56,7 +56,7 @@ describe('exportBreakdownCSV', () => {
         capturedContent = this.content
       }
     })
-    exportBreakdownCSV(mockRows, mockTotals, 'category', 'EUR')
+    exportBreakdownCSV(mockRows, mockTotals, 'category')
     expect(capturedContent).toContain('Group Name')
     expect(capturedContent).toContain('Actual Cost')
     expect(capturedContent).toContain('Budgeted')
@@ -69,7 +69,7 @@ describe('exportBreakdownCSV', () => {
     vi.stubGlobal('Blob', class MockBlob {
       constructor(parts: BlobPart[]) { capturedContent = String(parts[0]) }
     })
-    exportBreakdownCSV(mockRows, mockTotals, 'category', 'EUR')
+    exportBreakdownCSV(mockRows, mockTotals, 'category')
     expect(capturedContent).toContain('Groceries')
     expect(capturedContent).toContain('500.00')
     expect(capturedContent).toContain('Transport')
@@ -80,9 +80,18 @@ describe('exportBreakdownCSV', () => {
     vi.stubGlobal('Blob', class MockBlob {
       constructor(parts: BlobPart[]) { capturedContent = String(parts[0]) }
     })
-    exportBreakdownCSV(mockRows, mockTotals, 'category', 'EUR')
-    const lines = capturedContent.split('\n')
+    exportBreakdownCSV(mockRows, mockTotals, 'category')
+    const lines = capturedContent.split('\r\n')
     expect(lines[lines.length - 1]).toContain('Total')
+  })
+
+  it('uses CRLF line endings', () => {
+    let capturedContent = ''
+    vi.stubGlobal('Blob', class MockBlob {
+      constructor(parts: BlobPart[]) { capturedContent = String(parts[0]) }
+    })
+    exportBreakdownCSV(mockRows, mockTotals, 'category')
+    expect(capturedContent).toContain('\r\n')
   })
 })
 
@@ -99,6 +108,13 @@ describe('exportTransactionsCSV', () => {
     expect(mockAnchor.download).toMatch(/cost-explorer-transactions-Groceries-\d{4}-\d{2}-\d{2}\.csv/)
   })
 
+  it('sanitizes special characters in itemName for filename', () => {
+    const mockAnchor = { href: '', download: '', click: mockClick }
+    vi.spyOn(document, 'createElement').mockImplementation(() => mockAnchor as unknown as HTMLAnchorElement)
+    exportTransactionsCSV(mockTransactions, 'Food & Drink')
+    expect(mockAnchor.download).toMatch(/cost-explorer-transactions-Food---Drink-\d{4}-\d{2}-\d{2}\.csv/)
+  })
+
   it('includes header and transaction rows', () => {
     let capturedContent = ''
     vi.stubGlobal('Blob', class MockBlob {
@@ -112,6 +128,15 @@ describe('exportTransactionsCSV', () => {
     expect(capturedContent).toContain('150.00')
   })
 
+  it('uses CRLF line endings', () => {
+    let capturedContent = ''
+    vi.stubGlobal('Blob', class MockBlob {
+      constructor(parts: BlobPart[]) { capturedContent = String(parts[0]) }
+    })
+    exportTransactionsCSV(mockTransactions, 'Groceries')
+    expect(capturedContent).toContain('\r\n')
+  })
+
   it('escapes commas in descriptions', () => {
     let capturedContent = ''
     vi.stubGlobal('Blob', class MockBlob {
@@ -123,5 +148,18 @@ describe('exportTransactionsCSV', () => {
     }
     exportTransactionsCSV([txWithComma], 'Test')
     expect(capturedContent).toContain('"Shop, market"')
+  })
+
+  it('escapes carriage returns in descriptions', () => {
+    let capturedContent = ''
+    vi.stubGlobal('Blob', class MockBlob {
+      constructor(parts: BlobPart[]) { capturedContent = String(parts[0]) }
+    })
+    const txWithCR: Transaction = {
+      ...mockTransactions[0],
+      description: 'Line1\rLine2',
+    }
+    exportTransactionsCSV([txWithCR], 'Test')
+    expect(capturedContent).toContain('"Line1\rLine2"')
   })
 })

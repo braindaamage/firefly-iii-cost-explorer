@@ -116,9 +116,17 @@ export function ChartHeader({ showCumulative, onToggleCumulative, onExportPNG }:
           <FilterDropdown open={menuOpen} onClose={() => setMenuOpen(false)} anchorRef={menuRef}>
             <div
               role="menuitem"
+              tabIndex={0}
               onClick={() => {
                 setMenuOpen(false)
                 onExportPNG?.()
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  setMenuOpen(false)
+                  onExportPNG?.()
+                }
               }}
               style={{
                 padding: '10px 16px',

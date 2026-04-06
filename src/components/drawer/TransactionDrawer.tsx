@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { useTransactions } from '../../hooks/useTransactions'
 import { useConfig } from '../../hooks/useConfig'
 import { getEffectiveDateRange } from '../../lib/date-utils'
@@ -36,18 +37,49 @@ export function TransactionDrawer({ row, filters, onClose }: TransactionDrawerPr
   const { config } = useConfig()
   const range = getEffectiveDateRange(filters)
 
+  // B-1: animation-aware close — track open state separately from row presence
+  // Initialize currentRow from row so first render calls useTransactions with the correct id
+  const [isOpen, setIsOpen] = useState(false)
+  const [currentRow, setCurrentRow] = useState<BreakdownRow | null>(row)
+
+  useEffect(() => {
+    if (row !== null) {
+      setCurrentRow(row)
+      // Two rAFs ensure the element is mounted before the transition starts
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setIsOpen(true))
+      })
+    } else {
+      setIsOpen(false)
+      // currentRow is cleared in handleTransitionEnd after slide-out completes
+    }
+  }, [row])
+
+  // M-1: close on Escape key
+  useEffect(() => {
+    if (!currentRow) return
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose()
+    }
+    document.addEventListener('keydown', handleKeyDown)
+    return () => document.removeEventListener('keydown', handleKeyDown)
+  }, [currentRow, onClose])
+
+  function handleTransitionEnd() {
+    if (!isOpen) setCurrentRow(null)
+  }
+
   const { transactions, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useTransactions(
       filters.groupBy,
-      row?.id ?? '',
-      row?.name ?? '',
+      currentRow?.id ?? '',
+      currentRow?.name ?? '',
       range,
-      row !== null && !!config
+      currentRow !== null && !!config
     )
 
-  if (!row) return null
+  if (!currentRow) return null
 
-  const isOpen = row !== null
   const subtitle = `${formatDate(range.start)} – ${formatDate(range.end)}`
 
   return (
@@ -68,6 +100,7 @@ export function TransactionDrawer({ row, filters, onClose }: TransactionDrawerPr
 
       {/* Drawer panel */}
       <div
+        onTransitionEnd={handleTransitionEnd}
         style={{
           position: 'fixed',
           top: 0,
@@ -103,7 +136,7 @@ export function TransactionDrawer({ row, filters, onClose }: TransactionDrawerPr
                   margin: 0,
                 }}
               >
-                {row.name} — Transactions
+                {currentRow.name} — Transactions
               </h2>
               <p
                 style={{
@@ -118,17 +151,20 @@ export function TransactionDrawer({ row, filters, onClose }: TransactionDrawerPr
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              {/* B-2: disable when loading or no transactions */}
               <button
                 type="button"
-                onClick={() => exportTransactionsCSV(transactions, row.name)}
+                onClick={() => exportTransactionsCSV(transactions, currentRow.name)}
+                disabled={isLoading || transactions.length === 0}
                 style={{
                   background: 'none',
                   border: 'none',
-                  cursor: 'pointer',
+                  cursor: isLoading || transactions.length === 0 ? 'not-allowed' : 'pointer',
                   fontFamily: "'Roboto', sans-serif",
                   fontSize: '13px',
                   color: '#8ab4f8',
                   padding: '4px 8px',
+                  opacity: isLoading || transactions.length === 0 ? 0.4 : 1,
                 }}
               >
                 Export CSV

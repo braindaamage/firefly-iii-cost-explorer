@@ -14,7 +14,10 @@ export function exportChartAsPNG(): void {
     canvas.width = svg.clientWidth || 800
     canvas.height = svg.clientHeight || 400
     const ctx = canvas.getContext('2d')
-    if (!ctx) return
+    if (!ctx) {
+      URL.revokeObjectURL(svgUrl)
+      return
+    }
     ctx.fillStyle = '#1e1e1e'
     ctx.fillRect(0, 0, canvas.width, canvas.height)
     ctx.drawImage(img, 0, 0)
@@ -24,6 +27,9 @@ export function exportChartAsPNG(): void {
     link.download = `cost-explorer-chart-${date}.png`
     link.href = canvas.toDataURL('image/png')
     link.click()
+    URL.revokeObjectURL(svgUrl)
+  }
+  img.onerror = () => {
     URL.revokeObjectURL(svgUrl)
   }
   img.src = svgUrl
