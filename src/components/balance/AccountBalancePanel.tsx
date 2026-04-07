@@ -15,7 +15,11 @@ interface AccountBalancePanelProps {
   loading: boolean
 }
 
-function SkeletonPanel() {
+interface SkeletonPanelProps {
+  isMobile: boolean
+}
+
+function SkeletonPanel({ isMobile }: SkeletonPanelProps) {
   return (
     <div
       aria-label="Loading balances"
@@ -38,12 +42,18 @@ function SkeletonPanel() {
           animation: 'pulse 1.5s ease-in-out infinite',
         }}
       />
-      <div style={{ display: 'flex', gap: '12px' }}>
+      <div
+        style={
+          isMobile
+            ? { display: 'grid', gridTemplateColumns: '1fr', gap: '6px' }
+            : { display: 'flex', gap: '12px' }
+        }
+      >
         {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
             style={{
-              width: '150px',
+              width: isMobile ? undefined : '150px',
               height: '60px',
               backgroundColor: '#2d2d2d',
               borderRadius: '4px',
@@ -91,7 +101,7 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
     )
   }, [accounts])
 
-  if (loading) return <SkeletonPanel />
+  if (loading) return <SkeletonPanel isMobile={isMobile} />
   if (accounts.length === 0) return null
 
   return (
@@ -121,12 +131,11 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
         </div>
         <div
           data-testid="net-worth-totals"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            flexWrap: 'wrap',
-          }}
+          style={
+            isMobile
+              ? { display: 'flex', flexDirection: 'column', gap: '4px' }
+              : { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }
+          }
         >
           {totals.map((t, i) => (
             <span
@@ -134,7 +143,7 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
               data-testid="currency-total"
               style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
             >
-              {i > 0 && (
+              {!isMobile && i > 0 && (
                 <span style={{ color: '#9aa0a6', fontSize: '20px', lineHeight: '1' }}>·</span>
               )}
               <span
@@ -142,7 +151,7 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
                 style={{
                   fontFamily: "'Roboto', sans-serif",
                   color: '#e8eaed',
-                  fontSize: '24px',
+                  fontSize: isMobile ? '20px' : '24px',
                   fontWeight: 600,
                 }}
               >
@@ -157,7 +166,7 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
       <div
         style={
           isMobile
-            ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }
+            ? { display: 'grid', gridTemplateColumns: '1fr', gap: '6px' }
             : { display: 'flex', flexDirection: 'row', gap: '8px', overflowX: 'auto' }
         }
       >
@@ -169,7 +178,7 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
               backgroundColor: '#121212',
               border: '1px solid #3c4043',
               borderRadius: '6px',
-              padding: '12px 16px',
+              padding: isMobile ? '10px 12px' : '12px 16px',
               flexShrink: 0,
               minWidth: isMobile ? undefined : '140px',
             }}
@@ -194,7 +203,7 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
               style={{
                 fontFamily: "'Roboto', sans-serif",
                 color: acc.balance < 0 ? '#f28b82' : '#e8eaed',
-                fontSize: '16px',
+                fontSize: isMobile ? '14px' : '16px',
                 fontWeight: 500,
               }}
             >

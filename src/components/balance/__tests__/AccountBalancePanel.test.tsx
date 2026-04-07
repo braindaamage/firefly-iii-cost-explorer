@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { AccountBalancePanel } from '../AccountBalancePanel'
+import { useBreakpoint } from '../../../hooks/useBreakpoint'
 import type { AssetAccountBalance } from '../../../api/types'
 
 vi.mock('../../../hooks/useBreakpoint', () => ({
@@ -94,5 +95,53 @@ describe('AccountBalancePanel', () => {
     // USD group second: USD Main (4000) then USD Savings (1000)
     expect(names[2]).toBe('USD Main')
     expect(names[3]).toBe('USD Savings')
+  })
+})
+
+describe('AccountBalancePanel — mobile', () => {
+  const singleAccount: AssetAccountBalance[] = [
+    { id: '1', name: 'Checking', balance: 1000, currencyCode: 'EUR', currencySymbol: '€', currencyDecimalPlaces: 2 },
+  ]
+  const multiCurrency: AssetAccountBalance[] = [
+    { id: '1', name: 'EUR Account', balance: 1000, currencyCode: 'EUR', currencySymbol: '€', currencyDecimalPlaces: 2 },
+    { id: '2', name: 'USD Account', balance: 500, currencyCode: 'USD', currencySymbol: '$', currencyDecimalPlaces: 2 },
+  ]
+
+  beforeEach(() => {
+    vi.mocked(useBreakpoint).mockReturnValue('mobile')
+  })
+
+  it('stacks Net Worth totals vertically on mobile', () => {
+    render(<AccountBalancePanel accounts={multiCurrency} loading={false} />)
+    const totalsEl = screen.getByTestId('net-worth-totals')
+    expect(totalsEl).toHaveStyle({ flexDirection: 'column', gap: '4px' })
+  })
+
+  it('does not render middle dot separator on mobile', () => {
+    render(<AccountBalancePanel accounts={multiCurrency} loading={false} />)
+    expect(screen.getByTestId('net-worth-totals')).not.toHaveTextContent('·')
+  })
+
+  it('renders Net Worth total font-size 20px on mobile', () => {
+    render(<AccountBalancePanel accounts={singleAccount} loading={false} />)
+    expect(screen.getByTestId('net-worth-total')).toHaveStyle({ fontSize: '20px' })
+  })
+
+  it('renders cards in single column grid on mobile', () => {
+    render(<AccountBalancePanel accounts={singleAccount} loading={false} />)
+    const card = screen.getByTestId('account-card')
+    expect(card.parentElement).toHaveStyle({ gridTemplateColumns: '1fr' })
+  })
+
+  it('renders account balance font-size 14px on mobile', () => {
+    render(<AccountBalancePanel accounts={singleAccount} loading={false} />)
+    expect(screen.getByTestId('account-balance-1')).toHaveStyle({ fontSize: '14px' })
+  })
+
+  it('renders skeleton with single column on mobile', () => {
+    render(<AccountBalancePanel accounts={[]} loading={true} />)
+    const skeleton = screen.getByLabelText('Loading balances')
+    const cardsContainer = skeleton.lastElementChild as HTMLElement
+    expect(cardsContainer).toHaveStyle({ gridTemplateColumns: '1fr' })
   })
 })
