@@ -3,6 +3,8 @@ import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { formatCurrency } from '../../lib/format-currency'
 import type { AssetAccountBalance } from '../../api/types'
 
+type Breakpoint = 'mobile' | 'tablet' | 'desktop'
+
 interface CurrencyTotal {
   currencyCode: string
   currencySymbol: string
@@ -16,10 +18,17 @@ interface AccountBalancePanelProps {
 }
 
 interface SkeletonPanelProps {
-  isMobile: boolean
+  breakpoint: Breakpoint
 }
 
-function SkeletonPanel({ isMobile }: SkeletonPanelProps) {
+function SkeletonPanel({ breakpoint }: SkeletonPanelProps) {
+  const cardsStyle =
+    breakpoint === 'desktop'
+      ? { display: 'flex', gap: '12px' }
+      : breakpoint === 'tablet'
+        ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }
+        : { display: 'grid', gridTemplateColumns: '1fr', gap: '6px' }
+
   return (
     <div
       aria-label="Loading balances"
@@ -42,18 +51,12 @@ function SkeletonPanel({ isMobile }: SkeletonPanelProps) {
           animation: 'pulse 1.5s ease-in-out infinite',
         }}
       />
-      <div
-        style={
-          isMobile
-            ? { display: 'grid', gridTemplateColumns: '1fr', gap: '6px' }
-            : { display: 'flex', gap: '12px' }
-        }
-      >
+      <div style={cardsStyle}>
         {Array.from({ length: 4 }).map((_, i) => (
           <div
             key={i}
             style={{
-              width: isMobile ? undefined : '150px',
+              width: breakpoint === 'desktop' ? '150px' : undefined,
               height: '60px',
               backgroundColor: '#2d2d2d',
               borderRadius: '4px',
@@ -69,7 +72,7 @@ function SkeletonPanel({ isMobile }: SkeletonPanelProps) {
 
 export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelProps) {
   const breakpoint = useBreakpoint()
-  const isMobile = breakpoint === 'mobile'
+  const isCompact = breakpoint !== 'desktop'
 
   const totals = useMemo<CurrencyTotal[]>(() => {
     const map = new Map<string, CurrencyTotal>()
@@ -101,8 +104,24 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
     )
   }, [accounts])
 
-  if (loading) return <SkeletonPanel isMobile={isMobile} />
+  if (loading) return <SkeletonPanel breakpoint={breakpoint} />
   if (accounts.length === 0) return null
+
+  const totalsFontSize = { mobile: '20px', tablet: '22px', desktop: '24px' }[breakpoint]
+  const balanceFontSize = { mobile: '14px', tablet: '15px', desktop: '16px' }[breakpoint]
+
+  const totalsStyle = isCompact
+    ? { display: 'flex', flexDirection: 'column' as const, gap: '4px' }
+    : { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' as const }
+
+  const cardsStyle =
+    breakpoint === 'desktop'
+      ? { display: 'flex', flexDirection: 'row' as const, gap: '8px', overflowX: 'auto' as const }
+      : breakpoint === 'tablet'
+        ? { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }
+        : { display: 'grid', gridTemplateColumns: '1fr', gap: '6px' }
+
+  const cardPadding = breakpoint === 'mobile' ? '10px 12px' : '12px 16px'
 
   return (
     <div
@@ -129,21 +148,14 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
         >
           Net Worth
         </div>
-        <div
-          data-testid="net-worth-totals"
-          style={
-            isMobile
-              ? { display: 'flex', flexDirection: 'column', gap: '4px' }
-              : { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }
-          }
-        >
+        <div data-testid="net-worth-totals" style={totalsStyle}>
           {totals.map((t, i) => (
             <span
               key={t.currencyCode}
               data-testid="currency-total"
               style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
             >
-              {!isMobile && i > 0 && (
+              {!isCompact && i > 0 && (
                 <span style={{ color: '#9aa0a6', fontSize: '20px', lineHeight: '1' }}>·</span>
               )}
               <span
@@ -151,7 +163,7 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
                 style={{
                   fontFamily: "'Roboto', sans-serif",
                   color: '#e8eaed',
-                  fontSize: isMobile ? '20px' : '24px',
+                  fontSize: totalsFontSize,
                   fontWeight: 600,
                 }}
               >
@@ -163,13 +175,7 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
       </div>
 
       {/* Account cards */}
-      <div
-        style={
-          isMobile
-            ? { display: 'grid', gridTemplateColumns: '1fr', gap: '6px' }
-            : { display: 'flex', flexDirection: 'row', gap: '8px', overflowX: 'auto' }
-        }
-      >
+      <div style={cardsStyle}>
         {sortedAccounts.map((acc) => (
           <div
             key={acc.id}
@@ -178,9 +184,9 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
               backgroundColor: '#121212',
               border: '1px solid #3c4043',
               borderRadius: '6px',
-              padding: isMobile ? '10px 12px' : '12px 16px',
+              padding: cardPadding,
               flexShrink: 0,
-              minWidth: isMobile ? undefined : '140px',
+              minWidth: breakpoint === 'desktop' ? '140px' : undefined,
             }}
           >
             <div
@@ -203,7 +209,7 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
               style={{
                 fontFamily: "'Roboto', sans-serif",
                 color: acc.balance < 0 ? '#f28b82' : '#e8eaed',
-                fontSize: isMobile ? '14px' : '16px',
+                fontSize: balanceFontSize,
                 fontWeight: 500,
               }}
             >

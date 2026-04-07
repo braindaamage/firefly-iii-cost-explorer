@@ -4,6 +4,11 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { FilterBar } from './FilterBar'
 import { DEFAULT_FILTERS } from '../../types/filters'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
+
+vi.mock('../../hooks/useBreakpoint', () => ({
+  useBreakpoint: vi.fn(() => 'desktop'),
+}))
 
 const mockUpdateFilter = vi.fn()
 const mockAddOptionalFilter = vi.fn()
@@ -251,5 +256,30 @@ describe('FilterBar', () => {
     })
     await userEvent.click(screen.getByRole('button', { name: /remove budgets/i }))
     expect(mockRemoveOptionalFilter).toHaveBeenCalledWith('budgetIds')
+  })
+})
+
+describe('FilterBar — responsive padding', () => {
+  function renderBar() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const { container } = render(
+      <QueryClientProvider client={client}><FilterBar {...defaultProps} /></QueryClientProvider>
+    )
+    return container.firstElementChild as HTMLElement
+  }
+
+  it('has padding 17px on desktop', () => {
+    vi.mocked(useBreakpoint).mockReturnValue('desktop')
+    expect(renderBar()).toHaveStyle({ padding: '17px' })
+  })
+
+  it('has padding 14px on tablet', () => {
+    vi.mocked(useBreakpoint).mockReturnValue('tablet')
+    expect(renderBar()).toHaveStyle({ padding: '14px' })
+  })
+
+  it('has padding 12px on mobile', () => {
+    vi.mocked(useBreakpoint).mockReturnValue('mobile')
+    expect(renderBar()).toHaveStyle({ padding: '12px' })
   })
 })

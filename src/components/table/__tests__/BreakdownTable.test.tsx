@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BreakdownTable } from '../BreakdownTable'
+import { useBreakpoint } from '../../../hooks/useBreakpoint'
 import type { BreakdownRow } from '../../../types/breakdown'
 
 vi.mock('../../../hooks/useBreakpoint', () => ({
@@ -151,5 +152,52 @@ describe('BreakdownTable', () => {
   it('renders table title based on groupBy', () => {
     render(<BreakdownTable {...defaultProps} groupBy="category" />)
     expect(screen.getByText('Category Breakdown')).toBeInTheDocument()
+  })
+})
+
+describe('BreakdownTable — tablet', () => {
+  beforeEach(() => {
+    vi.mocked(useBreakpoint).mockReturnValue('tablet')
+  })
+
+  it('renders cells with tablet padding (10px 14px)', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const cells = screen.getAllByRole('cell')
+    const periodCell = cells[1]
+    expect(periodCell).toHaveStyle({ padding: '10px 14px' })
+  })
+
+  it('renders cells with fontSize 13px on tablet', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const cells = screen.getAllByRole('cell')
+    const periodCell = cells[1]
+    expect(periodCell).toHaveStyle({ fontSize: '13px' })
+  })
+})
+
+describe('BreakdownTable — mobile', () => {
+  beforeEach(() => {
+    vi.mocked(useBreakpoint).mockReturnValue('mobile')
+  })
+
+  it('renders cells with mobile padding (8px 10px)', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const cells = screen.getAllByRole('cell')
+    const periodCell = cells[1]
+    expect(periodCell).toHaveStyle({ padding: '8px 10px' })
+  })
+
+  it('renders cells with fontSize 12px on mobile', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const cells = screen.getAllByRole('cell')
+    const periodCell = cells[1]
+    expect(periodCell).toHaveStyle({ fontSize: '12px' })
+  })
+
+  it('shows export button as icon-only on mobile', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const exportBtn = screen.getByRole('button', { name: 'Export CSV' })
+    expect(exportBtn.querySelector('svg')).toBeTruthy()
+    expect(exportBtn).not.toHaveTextContent('Export CSV')
   })
 })

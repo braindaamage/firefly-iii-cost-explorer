@@ -267,17 +267,20 @@ export function FilterBar({
     return `${ids.length} selected`
   }
 
+  const padding = breakpoint === 'mobile' ? '12px' : breakpoint === 'tablet' ? '14px' : '17px'
+  const gap = breakpoint === 'mobile' ? '10px' : '12px'
+
   return (
     <div
       style={{
         backgroundColor: '#1e1e1e',
         border: '1px solid #3c4043',
         borderRadius: '8px',
-        padding: '17px',
+        padding,
         display: 'flex',
         alignItems: breakpoint === 'mobile' ? 'stretch' : 'center',
         flexDirection: breakpoint === 'mobile' ? 'column' : 'row',
-        gap: '12px',
+        gap,
         flexWrap: breakpoint === 'mobile' ? 'nowrap' : 'wrap',
       }}
     >

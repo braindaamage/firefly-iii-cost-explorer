@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
 import { DashboardPage } from '../DashboardPage'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 
 vi.mock('../../hooks/useConfig', () => ({
   useConfig: () => ({
@@ -20,6 +21,7 @@ vi.mock('../../hooks/useBreakpoint', () => ({
 
 vi.mock('../../api/accounts', () => ({
   fetchAssetAccounts: vi.fn().mockResolvedValue([]),
+  fetchAssetAccountBalances: vi.fn().mockResolvedValue([]),
 }))
 
 vi.mock('../../api/categories', () => ({
@@ -124,5 +126,34 @@ describe('DashboardPage', () => {
     await waitFor(() => {
       expect(vi.mocked(fetchInsightExpenseByCategory).mock.calls.length).toBeGreaterThan(callsBefore)
     })
+  })
+})
+
+describe('DashboardPage — responsive main padding', () => {
+  function renderPage() {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const { container } = render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <DashboardPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+    return container.querySelector('main') as HTMLElement
+  }
+
+  it('main has padding 24px on desktop', () => {
+    vi.mocked(useBreakpoint).mockReturnValue('desktop')
+    expect(renderPage()).toHaveStyle({ padding: '24px' })
+  })
+
+  it('main has padding 20px on tablet', () => {
+    vi.mocked(useBreakpoint).mockReturnValue('tablet')
+    expect(renderPage()).toHaveStyle({ padding: '20px' })
+  })
+
+  it('main has padding 16px on mobile', () => {
+    vi.mocked(useBreakpoint).mockReturnValue('mobile')
+    expect(renderPage()).toHaveStyle({ padding: '16px' })
   })
 })
