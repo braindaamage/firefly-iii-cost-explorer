@@ -35,7 +35,19 @@ export interface AccountRaw {
     name: string
     type: string
     currency_code: string
+    currency_symbol: string
+    currency_decimal_places: number
+    current_balance: string
   }
+}
+
+export interface AssetAccountBalance {
+  id: string
+  name: string
+  balance: number
+  currencyCode: string
+  currencySymbol: string
+  currencyDecimalPlaces: number
 }
 
 export interface BudgetRaw {

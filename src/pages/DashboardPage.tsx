@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { ApiError } from '../api/client'
 import { Header } from '../components/layout/Header'
 import { PageHeader } from '../components/layout/PageHeader'
@@ -10,16 +11,20 @@ import { ChartLegend } from '../components/chart/ChartLegend'
 import { BreakdownTable } from '../components/table/BreakdownTable'
 import { TransactionDrawer } from '../components/drawer/TransactionDrawer'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
+import { AccountBalancePanel } from '../components/balance/AccountBalancePanel'
 import { useFilters } from '../hooks/useFilters'
+import { useConfig } from '../hooks/useConfig'
 import { useDashboardData } from '../hooks/useDashboardData'
 import { useGranularity } from '../hooks/useGranularity'
 import { transformToBreakdownRows } from '../lib/breakdown-transform'
 import { exportBreakdownCSV } from '../lib/csv-export'
 import { exportChartAsPNG } from '../lib/chart-export'
+import { fetchAssetAccountBalances } from '../api/accounts'
 import type { BreakdownRow } from '../types/breakdown'
 
 export function DashboardPage() {
   const navigate = useNavigate()
+  const { config } = useConfig()
 
   const {
     filters,
@@ -29,6 +34,13 @@ export function DashboardPage() {
     removeOptionalFilter,
     availableOptionalFilters,
   } = useFilters()
+
+  const { data: accountBalances, isLoading: balancesLoading } = useQuery({
+    queryKey: ['accountBalances', config?.baseUrl, config?.apiToken],
+    queryFn: () => fetchAssetAccountBalances(config!.baseUrl, config!.apiToken),
+    enabled: !!config,
+    staleTime: 2 * 60 * 1000,
+  })
 
   const { granularity, updateGranularity } = useGranularity()
   const dashboardData = useDashboardData(filters, granularity)
@@ -78,6 +90,11 @@ export function DashboardPage() {
         <PageHeader
           title="Cost Explorer"
           subtitle="Analyze your spending trends and budget variance."
+        />
+
+        <AccountBalancePanel
+          accounts={accountBalances ?? []}
+          loading={balancesLoading}
         />
 
         {combinedError && !is401 && (
