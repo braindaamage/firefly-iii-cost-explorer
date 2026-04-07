@@ -14,6 +14,7 @@ import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { AccountBalancePanel } from '../components/balance/AccountBalancePanel'
 import { useFilters } from '../hooks/useFilters'
 import { useConfig } from '../hooks/useConfig'
+import { useBreakpoint } from '../hooks/useBreakpoint'
 import { useDashboardData } from '../hooks/useDashboardData'
 import { useGranularity } from '../hooks/useGranularity'
 import { transformToBreakdownRows } from '../lib/breakdown-transform'
@@ -25,6 +26,8 @@ import type { BreakdownRow } from '../types/breakdown'
 export function DashboardPage() {
   const navigate = useNavigate()
   const { config } = useConfig()
+  const breakpoint = useBreakpoint()
+  const spacing = breakpoint === 'mobile' ? '16px' : breakpoint === 'tablet' ? '20px' : '24px'
 
   const {
     filters,
@@ -80,10 +83,10 @@ export function DashboardPage() {
       <main
         style={{
           flex: 1,
-          padding: '24px',
+          padding: spacing,
           display: 'flex',
           flexDirection: 'column',
-          gap: '24px',
+          gap: spacing,
           backgroundColor: '#121212',
         }}
       >

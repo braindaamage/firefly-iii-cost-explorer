@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { ChartHeader } from './ChartHeader'
+import { useBreakpoint } from '../../hooks/useBreakpoint'
 
 vi.mock('../../hooks/useBreakpoint', () => ({
   useBreakpoint: vi.fn(() => 'desktop'),
@@ -80,5 +81,25 @@ describe('ChartHeader', () => {
     render(<ChartHeader {...defaultProps} granularity="month" />)
     expect(screen.getByRole('button', { name: 'Month' })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: 'Auto' })).toHaveAttribute('aria-pressed', 'false')
+  })
+})
+
+describe('ChartHeader — tablet', () => {
+  beforeEach(() => {
+    vi.mocked(useBreakpoint).mockReturnValue('tablet')
+  })
+
+  it('renders granularity buttons in a second row on tablet', () => {
+    render(<ChartHeader {...defaultProps} />)
+    // On tablet (isCompact), granularity buttons are rendered in the compact row
+    const buttons = screen.getAllByRole('button', { name: /auto|day|week|month/i })
+    expect(buttons.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('granularity buttons have flex: 1 on tablet', () => {
+    render(<ChartHeader {...defaultProps} />)
+    // On tablet (isCompact), only the compact row is rendered (not the inline segmented control)
+    const autoButton = screen.getByRole('button', { name: 'Auto' })
+    expect(autoButton).toHaveStyle('flex: 1')
   })
 })

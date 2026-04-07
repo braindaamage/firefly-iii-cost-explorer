@@ -120,10 +120,16 @@ export function BreakdownTable({
     })
   }, [rows, sortKey, sortDir])
 
+  const cellPadding = breakpoint === 'mobile' ? '8px 10px' : breakpoint === 'tablet' ? '10px 14px' : '12px 16px'
+  const cellFontSize = breakpoint === 'mobile' ? '12px' : '13px'
+  const headerFontSize = breakpoint === 'mobile' ? '11px' : '12px'
+  const minColWidth = breakpoint === 'mobile' ? '90px' : breakpoint === 'tablet' ? '100px' : '120px'
+  const firstColMinWidth = breakpoint === 'mobile' ? '140px' : breakpoint === 'tablet' ? '160px' : 'auto'
+
   const cellStyle: React.CSSProperties = {
-    padding: '12px 16px',
+    padding: cellPadding,
     fontFamily: "'Roboto', sans-serif",
-    fontSize: '13px',
+    fontSize: cellFontSize,
     color: '#e8eaed',
     transition: 'background-color 150ms ease',
   }
@@ -131,7 +137,8 @@ export function BreakdownTable({
   const rightCell: React.CSSProperties = { ...cellStyle, textAlign: 'right' }
 
   const headerCellStyle: React.CSSProperties = {
-    padding: '10px 16px',
+    padding: cellPadding,
+    fontSize: headerFontSize,
     backgroundColor: '#1e1e1e',
     borderBottom: '1px solid #3c4043',
   }
@@ -163,7 +170,7 @@ export function BreakdownTable({
           style={{
             fontFamily: "'Roboto', sans-serif",
             fontWeight: 500,
-            fontSize: '16px',
+            fontSize: breakpoint === 'mobile' ? '14px' : '16px',
             color: '#e8eaed',
           }}
         >
@@ -172,6 +179,7 @@ export function BreakdownTable({
         <button
           type="button"
           onClick={onExportCSV}
+          aria-label="Export CSV"
           style={{
             background: 'none',
             border: 'none',
@@ -180,9 +188,15 @@ export function BreakdownTable({
             fontSize: '13px',
             color: '#8ab4f8',
             padding: '4px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
           }}
         >
-          Export CSV
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z" />
+          </svg>
+          {breakpoint !== 'mobile' && <span>Export CSV</span>}
         </button>
       </div>
 
@@ -202,10 +216,10 @@ export function BreakdownTable({
         </div>
       ) : (
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: periods.length > 3 ? `${300 + (periods.length + 1) * 120}px` : undefined }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: periods.length > 3 ? `${300 + (periods.length + 1) * parseInt(minColWidth)}px` : undefined }}>
             <thead>
               <tr>
-                <th style={{ ...headerCellStyle, textAlign: 'left', ...stickyFirstCol }}>
+                <th style={{ ...headerCellStyle, textAlign: 'left', minWidth: firstColMinWidth, ...stickyFirstCol }}>
                   <SortableHeader
                     label={GROUP_COLUMN_LABEL[groupBy]}
                     direction={dirFor('name')}
@@ -213,7 +227,7 @@ export function BreakdownTable({
                   />
                 </th>
                 {periods.map((period) => (
-                  <th key={period} style={{ ...headerCellStyle, textAlign: 'right' }}>
+                  <th key={period} style={{ ...headerCellStyle, textAlign: 'right', minWidth: minColWidth }}>
                     <SortableHeader
                       label={period}
                       direction={dirFor(period)}

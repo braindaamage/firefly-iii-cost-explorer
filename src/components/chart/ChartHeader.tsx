@@ -28,7 +28,7 @@ export function ChartHeader({
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const breakpoint = useBreakpoint()
-  const isMobile = breakpoint === 'mobile'
+  const isCompact = breakpoint !== 'desktop'
 
   const segmentedControl = (
     <div
@@ -86,8 +86,8 @@ export function ChartHeader({
         </span>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Granularity segmented control — hidden on mobile (shown below) */}
-          {!isMobile && segmentedControl}
+          {/* Granularity segmented control — hidden on mobile/tablet (shown below) */}
+          {!isCompact && segmentedControl}
 
           {/* Toggle cumulative */}
           <label
@@ -210,8 +210,8 @@ export function ChartHeader({
         </div>
       </div>
 
-      {/* Mobile: granularity control on its own row */}
-      {isMobile && (
+      {/* Mobile/tablet: granularity control on its own row */}
+      {isCompact && (
         <div style={{ marginTop: '8px', width: '100%' }}>
           <div style={{ display: 'flex', width: '100%', border: '1px solid #3c4043', borderRadius: '4px', overflow: 'hidden' }}>
             {GRANULARITY_OPTIONS.map((opt) => {

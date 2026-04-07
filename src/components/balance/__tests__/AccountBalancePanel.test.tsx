@@ -98,27 +98,27 @@ describe('AccountBalancePanel', () => {
   })
 })
 
-describe('AccountBalancePanel — mobile', () => {
-  const singleAccount: AssetAccountBalance[] = [
-    { id: '1', name: 'Checking', balance: 1000, currencyCode: 'EUR', currencySymbol: '€', currencyDecimalPlaces: 2 },
-  ]
-  const multiCurrency: AssetAccountBalance[] = [
-    { id: '1', name: 'EUR Account', balance: 1000, currencyCode: 'EUR', currencySymbol: '€', currencyDecimalPlaces: 2 },
-    { id: '2', name: 'USD Account', balance: 500, currencyCode: 'USD', currencySymbol: '$', currencyDecimalPlaces: 2 },
-  ]
+const singleAccount: AssetAccountBalance[] = [
+  { id: '1', name: 'Checking', balance: 1000, currencyCode: 'EUR', currencySymbol: '€', currencyDecimalPlaces: 2 },
+]
+const multiCurrencyAccounts: AssetAccountBalance[] = [
+  { id: '1', name: 'EUR Account', balance: 1000, currencyCode: 'EUR', currencySymbol: '€', currencyDecimalPlaces: 2 },
+  { id: '2', name: 'USD Account', balance: 500, currencyCode: 'USD', currencySymbol: '$', currencyDecimalPlaces: 2 },
+]
 
+describe('AccountBalancePanel — mobile', () => {
   beforeEach(() => {
     vi.mocked(useBreakpoint).mockReturnValue('mobile')
   })
 
   it('stacks Net Worth totals vertically on mobile', () => {
-    render(<AccountBalancePanel accounts={multiCurrency} loading={false} />)
+    render(<AccountBalancePanel accounts={multiCurrencyAccounts} loading={false} />)
     const totalsEl = screen.getByTestId('net-worth-totals')
     expect(totalsEl).toHaveStyle({ flexDirection: 'column', gap: '4px' })
   })
 
   it('does not render middle dot separator on mobile', () => {
-    render(<AccountBalancePanel accounts={multiCurrency} loading={false} />)
+    render(<AccountBalancePanel accounts={multiCurrencyAccounts} loading={false} />)
     expect(screen.getByTestId('net-worth-totals')).not.toHaveTextContent('·')
   })
 
@@ -143,5 +143,44 @@ describe('AccountBalancePanel — mobile', () => {
     const skeleton = screen.getByLabelText('Loading balances')
     const cardsContainer = skeleton.lastElementChild as HTMLElement
     expect(cardsContainer).toHaveStyle({ gridTemplateColumns: '1fr' })
+  })
+})
+
+describe('AccountBalancePanel — tablet', () => {
+  beforeEach(() => {
+    vi.mocked(useBreakpoint).mockReturnValue('tablet')
+  })
+
+  it('stacks Net Worth totals vertically on tablet', () => {
+    render(<AccountBalancePanel accounts={multiCurrencyAccounts} loading={false} />)
+    expect(screen.getByTestId('net-worth-totals')).toHaveStyle({ flexDirection: 'column', gap: '4px' })
+  })
+
+  it('does not render middle dot separator on tablet', () => {
+    render(<AccountBalancePanel accounts={multiCurrencyAccounts} loading={false} />)
+    expect(screen.getByTestId('net-worth-totals')).not.toHaveTextContent('·')
+  })
+
+  it('renders Net Worth total font-size 22px on tablet', () => {
+    render(<AccountBalancePanel accounts={singleAccount} loading={false} />)
+    expect(screen.getByTestId('net-worth-total')).toHaveStyle({ fontSize: '22px' })
+  })
+
+  it('renders cards in two column grid on tablet', () => {
+    render(<AccountBalancePanel accounts={singleAccount} loading={false} />)
+    const card = screen.getByTestId('account-card')
+    expect(card.parentElement).toHaveStyle({ gridTemplateColumns: '1fr 1fr' })
+  })
+
+  it('renders account balance font-size 15px on tablet', () => {
+    render(<AccountBalancePanel accounts={singleAccount} loading={false} />)
+    expect(screen.getByTestId('account-balance-1')).toHaveStyle({ fontSize: '15px' })
+  })
+
+  it('renders skeleton with two column grid on tablet', () => {
+    render(<AccountBalancePanel accounts={[]} loading={true} />)
+    const skeleton = screen.getByLabelText('Loading balances')
+    const cardsContainer = skeleton.lastElementChild as HTMLElement
+    expect(cardsContainer).toHaveStyle({ gridTemplateColumns: '1fr 1fr' })
   })
 })
