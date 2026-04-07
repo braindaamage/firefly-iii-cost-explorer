@@ -121,8 +121,8 @@ describe('fetchAssetAccounts', () => {
 
   it('returns mapped { id, name } list', async () => {
     const raw: AccountRaw[] = [
-      { id: '1', attributes: { name: 'Checking', type: 'asset', currency_code: 'EUR' } },
-      { id: '2', attributes: { name: 'Savings', type: 'asset', currency_code: 'EUR' } },
+      { id: '1', attributes: { name: 'Checking', type: 'asset', currency_code: 'EUR', currency_symbol: '€', currency_decimal_places: 2, current_balance: '1000.00' } },
+      { id: '2', attributes: { name: 'Savings', type: 'asset', currency_code: 'EUR', currency_symbol: '€', currency_decimal_places: 2, current_balance: '2000.00' } },
     ]
     mockFetchOk(mockPaginatedResponse(raw))
     const result = await fetchAssetAccounts(BASE_URL, TOKEN)
@@ -133,8 +133,8 @@ describe('fetchAssetAccounts', () => {
   })
 
   it('fetches all pages and returns combined results', async () => {
-    const page1Raw: AccountRaw[] = [{ id: '1', attributes: { name: 'Checking', type: 'asset', currency_code: 'EUR' } }]
-    const page2Raw: AccountRaw[] = [{ id: '2', attributes: { name: 'Savings', type: 'asset', currency_code: 'EUR' } }]
+    const page1Raw: AccountRaw[] = [{ id: '1', attributes: { name: 'Checking', type: 'asset', currency_code: 'EUR', currency_symbol: '€', currency_decimal_places: 2, current_balance: '1000.00' } }]
+    const page2Raw: AccountRaw[] = [{ id: '2', attributes: { name: 'Savings', type: 'asset', currency_code: 'EUR', currency_symbol: '€', currency_decimal_places: 2, current_balance: '2000.00' } }]
     const page1 = { data: page1Raw, meta: { pagination: { total: 2, count: 1, per_page: 1, current_page: 1, total_pages: 2 } } }
     const page2 = { data: page2Raw, meta: { pagination: { total: 2, count: 1, per_page: 1, current_page: 2, total_pages: 2 } } }
     vi.stubGlobal('fetch', vi.fn()
