@@ -79,10 +79,17 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
     return Array.from(map.values())
   }, [accounts])
 
-  const sortedAccounts = useMemo(
-    () => [...accounts].sort((a, b) => b.balance - a.balance),
-    [accounts]
-  )
+  const sortedAccounts = useMemo(() => {
+    const byCurrency = new Map<string, AssetAccountBalance[]>()
+    accounts.forEach((acc) => {
+      const group = byCurrency.get(acc.currencyCode) ?? []
+      group.push(acc)
+      byCurrency.set(acc.currencyCode, group)
+    })
+    return Array.from(byCurrency.values()).flatMap((group) =>
+      group.sort((a, b) => b.balance - a.balance)
+    )
+  }, [accounts])
 
   if (loading) return <SkeletonPanel />
   if (accounts.length === 0) return null
@@ -157,6 +164,7 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
         {sortedAccounts.map((acc) => (
           <div
             key={acc.id}
+            data-testid="account-card"
             style={{
               backgroundColor: '#121212',
               border: '1px solid #3c4043',

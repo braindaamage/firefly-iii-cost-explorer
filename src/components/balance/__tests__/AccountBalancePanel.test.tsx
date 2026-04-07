@@ -78,4 +78,21 @@ describe('AccountBalancePanel', () => {
     render(<AccountBalancePanel accounts={multiCurrency} loading={false} />)
     expect(screen.getByTestId('net-worth-totals')).toHaveTextContent('·')
   })
+
+  it('groups accounts by currency then sorts by balance within each group', () => {
+    const mixedAccounts: AssetAccountBalance[] = [
+      { id: '1', name: 'EUR Savings', balance: 3000, currencyCode: 'EUR', currencySymbol: '€', currencyDecimalPlaces: 2 },
+      { id: '2', name: 'USD Main', balance: 4000, currencyCode: 'USD', currencySymbol: '$', currencyDecimalPlaces: 2 },
+      { id: '3', name: 'EUR Checking', balance: 5000, currencyCode: 'EUR', currencySymbol: '€', currencyDecimalPlaces: 2 },
+      { id: '4', name: 'USD Savings', balance: 1000, currencyCode: 'USD', currencySymbol: '$', currencyDecimalPlaces: 2 },
+    ]
+    render(<AccountBalancePanel accounts={mixedAccounts} loading={false} />)
+    const names = screen.getAllByTestId('account-name').map((el) => el.textContent)
+    // EUR group first (insertion order): EUR Checking (5000) then EUR Savings (3000)
+    expect(names[0]).toBe('EUR Checking')
+    expect(names[1]).toBe('EUR Savings')
+    // USD group second: USD Main (4000) then USD Savings (1000)
+    expect(names[2]).toBe('USD Main')
+    expect(names[3]).toBe('USD Savings')
+  })
 })
