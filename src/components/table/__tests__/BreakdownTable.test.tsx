@@ -193,4 +193,11 @@ describe('BreakdownTable — mobile', () => {
     const periodCell = cells[1]
     expect(periodCell).toHaveStyle({ fontSize: '12px' })
   })
+
+  it('shows export button as icon-only on mobile', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const exportBtn = screen.getByRole('button', { name: 'Export CSV' })
+    expect(exportBtn.querySelector('svg')).toBeTruthy()
+    expect(exportBtn).not.toHaveTextContent('Export CSV')
+  })
 })
