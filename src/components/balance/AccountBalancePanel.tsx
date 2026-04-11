@@ -201,7 +201,7 @@ function NetWorthHeader({ netWorth, isCompact, primaryFontSize, sublineFontSize 
                 fontWeight: 600,
               }}
             >
-              {formatCurrency(f.total, f.currencyCode, 2)}
+              {formatCurrency(f.total, f.currencyCode, f.decimalPlaces)}
             </span>
           </span>
         ))}
@@ -213,7 +213,6 @@ function NetWorthHeader({ netWorth, isCompact, primaryFontSize, sublineFontSize 
 
   const { primaryTotal, primaryCurrency, secondaries } = netWorth
   const visibleSecondaries = secondaries.filter((s) => s.value !== null)
-  const allSecondariesMissing = secondaries.length > 0 && visibleSecondaries.length === 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -229,7 +228,7 @@ function NetWorthHeader({ netWorth, isCompact, primaryFontSize, sublineFontSize 
         {formatCurrency(primaryTotal, primaryCurrency.code, primaryCurrency.decimalPlaces)}
       </div>
 
-      {visibleSecondaries.length > 0 && !allSecondariesMissing && (
+      {visibleSecondaries.length > 0 && (
         <div
           data-testid="net-worth-subline"
           style={{

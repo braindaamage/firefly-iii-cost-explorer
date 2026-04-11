@@ -122,8 +122,19 @@ const UNAVAILABLE: NetWorthResult = {
   secondaries: [],
   excludedAccounts: [],
   fallbackPerCurrency: [
-    { currencyCode: 'EUR', symbol: '€', total: 1000 },
-    { currencyCode: 'USD', symbol: '$', total: 500 },
+    { currencyCode: 'EUR', symbol: '€', decimalPlaces: 2, total: 1000 },
+    { currencyCode: 'USD', symbol: '$', decimalPlaces: 2, total: 500 },
+  ],
+}
+
+const UNAVAILABLE_CLP: NetWorthResult = {
+  status: 'unavailable',
+  primaryTotal: null,
+  primaryCurrency: null,
+  secondaries: [],
+  excludedAccounts: [],
+  fallbackPerCurrency: [
+    { currencyCode: 'CLP', symbol: 'CLP', decimalPlaces: 0, total: 6609492 },
   ],
 }
 
@@ -298,6 +309,14 @@ describe('AccountBalancePanel — state: unavailable', () => {
     render(<AccountBalancePanel netWorth={UNAVAILABLE} accounts={threeAccounts} />)
     expect(screen.getByTestId('unavailable-banner')).toBeInTheDocument()
     expect(screen.getAllByTestId('account-card')).toHaveLength(3)
+  })
+
+  it('formats CLP fallback total without decimal digits when decimalPlaces is 0', () => {
+    render(<AccountBalancePanel netWorth={UNAVAILABLE_CLP} accounts={[]} />)
+    const fallback = screen.getByTestId('net-worth-fallback')
+    expect(fallback).toBeInTheDocument()
+    // CLP has decimalPlaces: 0 — no trailing ".00" or ",00"
+    expect(fallback.textContent).not.toMatch(/[.,]\d{2}$/)
   })
 })
 
