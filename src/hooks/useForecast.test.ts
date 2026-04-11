@@ -158,6 +158,46 @@ describe('useForecast', () => {
     await waitFor(() => expect(result.current.status).toBe('partialNoBills'))
   })
 
+  it('status=partialNoHistory when all history entries are in a non-primary currency', async () => {
+    await setupConfigMock({ historyMonths: 3, model: 'weighted' })
+    const { fetchCurrencies } = await import('../api/currencies')
+    vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
+    const { fetchSummaryBasic } = await import('../api/summary')
+    vi.mocked(fetchSummaryBasic).mockResolvedValue(MOCK_MTD)
+    const { fetchBills } = await import('../api/bills')
+    vi.mocked(fetchBills).mockResolvedValue(MOCK_BILLS) // success → bills = 0
+    const { fetchExpenseNoBill } = await import('../api/insights')
+    // Return entries in USD (not primary EUR) → all months excluded from validDailyRates
+    vi.mocked(fetchExpenseNoBill).mockResolvedValue([
+      { ...makeHistoryEntries(300)[0], currency_code: 'USD' },
+    ])
+
+    const { result } = renderHook(() => useForecast(BASE_URL, TOKEN, TODAY), {
+      wrapper: makeWrapper(),
+    })
+    await waitFor(() => expect(result.current.status).toBe('partialNoHistory'))
+    expect(result.current.breakdown.historyMonthsUsed).toBe(0)
+    expect(result.current.mtdSpent).toBe(500)
+  })
+
+  it('status=unavailable when history has no primary-currency data and bills query fails', async () => {
+    await setupConfigMock({ historyMonths: 3, model: 'weighted' })
+    const { fetchCurrencies } = await import('../api/currencies')
+    vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
+    const { fetchSummaryBasic } = await import('../api/summary')
+    vi.mocked(fetchSummaryBasic).mockResolvedValue(MOCK_MTD)
+    const { fetchBills } = await import('../api/bills')
+    vi.mocked(fetchBills).mockRejectedValue(new Error('bills unavailable'))
+    const { fetchExpenseNoBill } = await import('../api/insights')
+    vi.mocked(fetchExpenseNoBill).mockResolvedValue([]) // empty → historyMonthsUsed = 0
+
+    const { result } = renderHook(() => useForecast(BASE_URL, TOKEN, TODAY), {
+      wrapper: makeWrapper(),
+    })
+    await waitFor(() => expect(result.current.status).toBe('unavailable'))
+    expect(result.current.mtdSpent).toBe(500)
+  })
+
   it('ok end-to-end: correct total with fixture arithmetic', async () => {
     // today = April 15. daysElapsed=15, daysRemaining=15.
     // 3 months history: March(31 days), Feb(28 days), Jan(31 days).
