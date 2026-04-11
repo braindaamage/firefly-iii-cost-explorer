@@ -23,7 +23,7 @@ export interface NetWorthResult {
   primaryCurrency: { code: string; symbol: string; decimalPlaces: number } | null
   secondaries: NetWorthConvertedValue[]
   excludedAccounts: { id: string; name: string; currencyCode: string }[]
-  fallbackPerCurrency: { currencyCode: string; symbol: string; total: number }[]
+  fallbackPerCurrency: { currencyCode: string; symbol: string; decimalPlaces: number; total: number }[]
 }
 
 export interface RateQueryState {
@@ -60,19 +60,23 @@ const ERROR_RESULT: NetWorthResult = {
 
 function buildFallbackPerCurrency(
   activeAccounts: Account[]
-): { currencyCode: string; symbol: string; total: number }[] {
-  const map = new Map<string, { symbol: string; total: number }>()
+): { currencyCode: string; symbol: string; decimalPlaces: number; total: number }[] {
+  const map = new Map<string, { symbol: string; decimalPlaces: number; total: number }>()
   for (const acc of activeAccounts) {
     const existing = map.get(acc.currencyCode)
     if (existing) {
       existing.total += acc.currentBalance
     } else {
-      map.set(acc.currencyCode, { symbol: acc.currencySymbol, total: acc.currentBalance })
+      map.set(acc.currencyCode, {
+        symbol: acc.currencySymbol,
+        decimalPlaces: acc.currencyDecimalPlaces,
+        total: acc.currentBalance,
+      })
     }
   }
   return Array.from(map.entries())
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([currencyCode, { symbol, total }]) => ({ currencyCode, symbol, total }))
+    .map(([currencyCode, { symbol, decimalPlaces, total }]) => ({ currencyCode, symbol, decimalPlaces, total }))
 }
 
 export function computeNetWorth(inputs: ComputeNetWorthInputs): NetWorthResult {

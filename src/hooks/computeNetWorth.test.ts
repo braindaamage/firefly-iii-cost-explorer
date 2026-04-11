@@ -269,6 +269,21 @@ describe('computeNetWorth', () => {
     expect(result.primaryTotal).toBe(500000)
   })
 
+  it('computeNetWorth_fallbackPerCurrency_propagatesDecimalPlaces', () => {
+    // CLP (decimalPlaces: 0) must carry through to fallbackPerCurrency entry
+    const accounts = [
+      makeAccount({ id: '1', currencyCode: 'CLP', currencySymbol: 'CLP', currencyDecimalPlaces: 0, currentBalance: 6609492, pcCurrentBalance: null }),
+    ]
+    const result = computeNetWorth(baseInputs({ accounts, primary: undefined }))
+
+    expect(result.status).toBe('unavailable')
+    expect(result.fallbackPerCurrency).toHaveLength(1)
+    const clp = result.fallbackPerCurrency[0]
+    expect(clp.currencyCode).toBe('CLP')
+    expect(clp.decimalPlaces).toBe(0)
+    expect(clp.total).toBe(6609492)
+  })
+
   it('computeNetWorth_pcBalanceZero_includedNotExcluded', () => {
     // Fix 2: account with currentBalance=0 and pcCurrentBalance=null (spec §8.7)
     // must NOT appear in excludedAccounts and must NOT make status 'partial'

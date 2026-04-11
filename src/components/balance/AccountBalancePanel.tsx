@@ -1,27 +1,19 @@
 import { useMemo } from 'react'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
 import { formatCurrency } from '../../lib/format-currency'
-import type { AssetAccountBalance } from '../../api/types'
+import type { Account } from '../../api/accounts'
+import type { NetWorthResult, NetWorthConvertedValue } from '../../hooks/computeNetWorth'
 
 type Breakpoint = 'mobile' | 'tablet' | 'desktop'
 
-interface CurrencyTotal {
-  currencyCode: string
-  currencySymbol: string
-  currencyDecimalPlaces: number
-  total: number
-}
-
 interface AccountBalancePanelProps {
-  accounts: AssetAccountBalance[]
-  loading: boolean
+  netWorth: NetWorthResult
+  accounts: Account[]
 }
 
-interface SkeletonPanelProps {
-  breakpoint: Breakpoint
-}
+// ─── Skeleton ────────────────────────────────────────────────────────────────
 
-function SkeletonPanel({ breakpoint }: SkeletonPanelProps) {
+function SkeletonPanel({ breakpoint }: { breakpoint: Breakpoint }) {
   const cardsStyle =
     breakpoint === 'desktop'
       ? { display: 'flex', gap: '12px' }
@@ -42,15 +34,37 @@ function SkeletonPanel({ breakpoint }: SkeletonPanelProps) {
         gap: '16px',
       }}
     >
-      <div
-        style={{
-          width: '200px',
-          height: '28px',
-          backgroundColor: '#2d2d2d',
-          borderRadius: '4px',
-          animation: 'pulse 1.5s ease-in-out infinite',
-        }}
-      />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <div
+          style={{
+            width: '80px',
+            height: '16px',
+            backgroundColor: '#2d2d2d',
+            borderRadius: '4px',
+            animation: 'pulse 1.5s ease-in-out infinite',
+          }}
+        />
+        <div
+          style={{
+            width: '200px',
+            height: '36px',
+            backgroundColor: '#2d2d2d',
+            borderRadius: '4px',
+            animation: 'pulse 1.5s ease-in-out infinite',
+            animationDelay: '0.1s',
+          }}
+        />
+        <div
+          style={{
+            width: '160px',
+            height: '16px',
+            backgroundColor: '#2d2d2d',
+            borderRadius: '4px',
+            animation: 'pulse 1.5s ease-in-out infinite',
+            animationDelay: '0.2s',
+          }}
+        />
+      </div>
       <div style={cardsStyle}>
         {Array.from({ length: 4 }).map((_, i) => (
           <div
@@ -70,49 +84,240 @@ function SkeletonPanel({ breakpoint }: SkeletonPanelProps) {
   )
 }
 
-export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelProps) {
+// ─── Warning chip ─────────────────────────────────────────────────────────────
+
+interface WarningChipProps {
+  label: string
+  title?: string
+  testId?: string
+}
+
+function WarningChip({ label, title, testId }: WarningChipProps) {
+  return (
+    <span
+      data-testid={testId ?? 'warning-chip'}
+      title={title}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        padding: '2px 8px',
+        borderRadius: '12px',
+        backgroundColor: '#3c2e0033',
+        color: '#f9ab00',
+        fontSize: '12px',
+        fontWeight: 500,
+        fontFamily: "'Roboto', sans-serif",
+        cursor: title ? 'help' : 'default',
+      }}
+    >
+      ⚠ {label}
+    </span>
+  )
+}
+
+// ─── Unavailable banner ───────────────────────────────────────────────────────
+
+function UnavailableBanner() {
+  return (
+    <div
+      data-testid="unavailable-banner"
+      role="note"
+      style={{
+        backgroundColor: '#1a237e22',
+        border: '1px solid #8ab4f8',
+        borderRadius: '6px',
+        padding: '12px 16px',
+        color: '#8ab4f8',
+        fontSize: '13px',
+        fontFamily: "'Roboto', sans-serif",
+        lineHeight: '1.6',
+      }}
+    >
+      ℹ Activá "Convert to primary currency" en tus ajustes de Firefly III para ver un net worth
+      consolidado.{' '}
+      <a
+        href="https://docs.firefly-iii.org/explanation/financial-concepts/exchange-rates/"
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{ color: '#8ab4f8', textDecoration: 'underline' }}
+      >
+        Ver docs
+      </a>
+    </div>
+  )
+}
+
+// ─── Net Worth header ─────────────────────────────────────────────────────────
+
+interface NetWorthHeaderProps {
+  netWorth: NetWorthResult
+  isCompact: boolean
+  primaryFontSize: string
+  sublineFontSize: string
+}
+
+function NetWorthHeader({ netWorth, isCompact, primaryFontSize, sublineFontSize }: NetWorthHeaderProps) {
+  const { status } = netWorth
+
+  if (status === 'error') {
+    return (
+      <div
+        data-testid="net-worth-error"
+        style={{ fontFamily: "'Roboto', sans-serif", color: '#f28b82', fontSize: '14px' }}
+      >
+        Failed to load balances. Please try again.
+      </div>
+    )
+  }
+
+  if (status === 'unavailable') {
+    const { fallbackPerCurrency } = netWorth
+    if (fallbackPerCurrency.length === 0) return null
+    return (
+      <div
+        data-testid="net-worth-fallback"
+        style={
+          isCompact
+            ? { display: 'flex', flexDirection: 'column' as const, gap: '4px' }
+            : { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' as const }
+        }
+      >
+        {fallbackPerCurrency.map((f, i) => (
+          <span
+            key={f.currencyCode}
+            data-testid="currency-total"
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            {!isCompact && i > 0 && (
+              <span style={{ color: '#9aa0a6', fontSize: '20px', lineHeight: '1' }}>·</span>
+            )}
+            <span
+              data-testid="net-worth-total"
+              style={{
+                fontFamily: "'Roboto', sans-serif",
+                color: '#e8eaed',
+                fontSize: primaryFontSize,
+                fontWeight: 600,
+              }}
+            >
+              {formatCurrency(f.total, f.currencyCode, f.decimalPlaces)}
+            </span>
+          </span>
+        ))}
+      </div>
+    )
+  }
+
+  if (netWorth.primaryTotal === null || netWorth.primaryCurrency === null) return null
+
+  const { primaryTotal, primaryCurrency, secondaries } = netWorth
+  const visibleSecondaries = secondaries.filter((s) => s.value !== null)
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div
+        data-testid="net-worth-primary"
+        style={{
+          fontFamily: "'Roboto', sans-serif",
+          color: '#e8eaed',
+          fontSize: primaryFontSize,
+          fontWeight: 600,
+        }}
+      >
+        {formatCurrency(primaryTotal, primaryCurrency.code, primaryCurrency.decimalPlaces)}
+      </div>
+
+      {visibleSecondaries.length > 0 && (
+        <div
+          data-testid="net-worth-subline"
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap' as const,
+            gap: '4px 12px',
+            overflowWrap: 'anywhere' as const,
+          }}
+        >
+          {visibleSecondaries.map((sec: NetWorthConvertedValue, i) => (
+            <span key={sec.currencyCode} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {!isCompact && i > 0 && (
+                <span style={{ color: '#9aa0a6', fontSize: '16px', lineHeight: '1' }}>·</span>
+              )}
+              <span
+                data-testid={`net-worth-secondary-${sec.currencyCode}`}
+                style={{
+                  fontFamily: "'Roboto', sans-serif",
+                  color: '#9aa0a6',
+                  fontSize: sublineFontSize,
+                  fontWeight: 400,
+                }}
+              >
+                {formatCurrency(sec.value as number, sec.currencyCode, sec.currencyDecimalPlaces)}
+              </span>
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Warning chips row ────────────────────────────────────────────────────────
+
+function WarningChipsRow({ netWorth }: { netWorth: NetWorthResult }) {
+  const { status } = netWorth
+  if (status !== 'partial' && status !== 'partialSecondary') return null
+
+  const missingSecondaries = netWorth.secondaries.filter((s) => s.value === null)
+  const allSecondariesMissing =
+    netWorth.secondaries.length > 0 && missingSecondaries.length === netWorth.secondaries.length
+
+  const hasExcluded = status === 'partial' && netWorth.excludedAccounts.length > 0
+  const hasMissing = missingSecondaries.length > 0
+
+  if (!hasExcluded && !hasMissing) return null
+
+  return (
+    <div
+      data-testid="warning-chips"
+      style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}
+    >
+      {hasExcluded && (
+        <WarningChip
+          testId="chip-excluded"
+          label={`${netWorth.excludedAccounts.length} cuentas excluidas`}
+          title={netWorth.excludedAccounts.map((a) => `${a.name} (${a.currencyCode})`).join('\n')}
+        />
+      )}
+      {allSecondariesMissing ? (
+        <WarningChip
+          testId="chip-all-rates-missing"
+          label="No secondary rates available"
+          title="No hay tasas de cambio disponibles para las monedas secundarias. Configurá las tasas en Firefly III."
+        />
+      ) : (
+        missingSecondaries.map((s) => (
+          <WarningChip
+            key={s.currencyCode}
+            testId={`chip-rate-missing-${s.currencyCode}`}
+            label={`${s.currencyCode} rate missing`}
+            title={`Configurá la tasa de cambio para ${s.currencyCode} en Firefly III.`}
+          />
+        ))
+      )}
+    </div>
+  )
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export function AccountBalancePanel({ netWorth, accounts }: AccountBalancePanelProps) {
   const breakpoint = useBreakpoint()
   const isCompact = breakpoint !== 'desktop'
 
-  const totals = useMemo<CurrencyTotal[]>(() => {
-    const map = new Map<string, CurrencyTotal>()
-    accounts.forEach((acc) => {
-      const existing = map.get(acc.currencyCode)
-      if (existing) {
-        existing.total += acc.balance
-      } else {
-        map.set(acc.currencyCode, {
-          currencyCode: acc.currencyCode,
-          currencySymbol: acc.currencySymbol,
-          currencyDecimalPlaces: acc.currencyDecimalPlaces,
-          total: acc.balance,
-        })
-      }
-    })
-    return Array.from(map.values())
-  }, [accounts])
-
-  const sortedAccounts = useMemo(() => {
-    const byCurrency = new Map<string, AssetAccountBalance[]>()
-    accounts.forEach((acc) => {
-      const group = byCurrency.get(acc.currencyCode) ?? []
-      group.push(acc)
-      byCurrency.set(acc.currencyCode, group)
-    })
-    return Array.from(byCurrency.values()).flatMap((group) =>
-      group.sort((a, b) => b.balance - a.balance)
-    )
-  }, [accounts])
-
-  if (loading) return <SkeletonPanel breakpoint={breakpoint} />
-  if (accounts.length === 0) return null
-
-  const totalsFontSize = { mobile: '20px', tablet: '22px', desktop: '24px' }[breakpoint]
+  const primaryFontSize = isCompact ? '26px' : '32px'
+  const sublineFontSize = isCompact ? '12px' : '14px'
   const balanceFontSize = { mobile: '14px', tablet: '15px', desktop: '16px' }[breakpoint]
-
-  const totalsStyle = isCompact
-    ? { display: 'flex', flexDirection: 'column' as const, gap: '4px' }
-    : { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' as const }
 
   const cardsStyle =
     breakpoint === 'desktop'
@@ -122,6 +327,21 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
         : { display: 'grid', gridTemplateColumns: '1fr', gap: '6px' }
 
   const cardPadding = breakpoint === 'mobile' ? '10px 12px' : '12px 16px'
+
+  const sortedAccounts = useMemo(() => {
+    const active = accounts.filter((a) => a.active)
+    const byCurrency = new Map<string, Account[]>()
+    active.forEach((acc) => {
+      const group = byCurrency.get(acc.currencyCode) ?? []
+      group.push(acc)
+      byCurrency.set(acc.currencyCode, group)
+    })
+    return Array.from(byCurrency.values()).flatMap((group) =>
+      group.sort((a, b) => b.currentBalance - a.currentBalance)
+    )
+  }, [accounts])
+
+  if (netWorth.status === 'loading') return <SkeletonPanel breakpoint={breakpoint} />
 
   return (
     <div
@@ -143,81 +363,69 @@ export function AccountBalancePanel({ accounts, loading }: AccountBalancePanelPr
             color: '#9aa0a6',
             fontSize: '13px',
             fontWeight: 500,
-            marginBottom: '4px',
+            marginBottom: '8px',
           }}
         >
           Net Worth
         </div>
-        <div data-testid="net-worth-totals" style={totalsStyle}>
-          {totals.map((t, i) => (
-            <span
-              key={t.currencyCode}
-              data-testid="currency-total"
-              style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
-            >
-              {!isCompact && i > 0 && (
-                <span style={{ color: '#9aa0a6', fontSize: '20px', lineHeight: '1' }}>·</span>
-              )}
-              <span
-                data-testid="net-worth-total"
-                style={{
-                  fontFamily: "'Roboto', sans-serif",
-                  color: '#e8eaed',
-                  fontSize: totalsFontSize,
-                  fontWeight: 600,
-                }}
-              >
-                {formatCurrency(t.total, t.currencyCode, t.currencyDecimalPlaces)}
-              </span>
-            </span>
-          ))}
-        </div>
+        <NetWorthHeader
+          netWorth={netWorth}
+          isCompact={isCompact}
+          primaryFontSize={primaryFontSize}
+          sublineFontSize={sublineFontSize}
+        />
+        <WarningChipsRow netWorth={netWorth} />
       </div>
 
+      {/* Unavailable info banner */}
+      {netWorth.status === 'unavailable' && <UnavailableBanner />}
+
       {/* Account cards */}
-      <div style={cardsStyle}>
-        {sortedAccounts.map((acc) => (
-          <div
-            key={acc.id}
-            data-testid="account-card"
-            style={{
-              backgroundColor: '#121212',
-              border: '1px solid #3c4043',
-              borderRadius: '6px',
-              padding: cardPadding,
-              flexShrink: 0,
-              minWidth: breakpoint === 'desktop' ? '140px' : undefined,
-            }}
-          >
+      {sortedAccounts.length > 0 && (
+        <div style={cardsStyle}>
+          {sortedAccounts.map((acc) => (
             <div
-              data-testid="account-name"
+              key={acc.id}
+              data-testid="account-card"
               style={{
-                fontFamily: "'Roboto', sans-serif",
-                color: '#9aa0a6',
-                fontSize: '12px',
-                fontWeight: 500,
-                marginBottom: '4px',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
+                backgroundColor: '#121212',
+                border: '1px solid #3c4043',
+                borderRadius: '6px',
+                padding: cardPadding,
+                flexShrink: 0,
+                minWidth: breakpoint === 'desktop' ? '140px' : undefined,
               }}
             >
-              {acc.name}
+              <div
+                data-testid="account-name"
+                style={{
+                  fontFamily: "'Roboto', sans-serif",
+                  color: '#9aa0a6',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  marginBottom: '4px',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {acc.name}
+              </div>
+              <div
+                data-testid={`account-balance-${acc.id}`}
+                style={{
+                  fontFamily: "'Roboto', sans-serif",
+                  color: acc.currentBalance < 0 ? '#f28b82' : '#e8eaed',
+                  fontSize: balanceFontSize,
+                  fontWeight: 500,
+                }}
+              >
+                {formatCurrency(acc.currentBalance, acc.currencyCode, acc.currencyDecimalPlaces)}
+              </div>
             </div>
-            <div
-              data-testid={`account-balance-${acc.id}`}
-              style={{
-                fontFamily: "'Roboto', sans-serif",
-                color: acc.balance < 0 ? '#f28b82' : '#e8eaed',
-                fontSize: balanceFontSize,
-                fontWeight: 500,
-              }}
-            >
-              {formatCurrency(acc.balance, acc.currencyCode, acc.currencyDecimalPlaces)}
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

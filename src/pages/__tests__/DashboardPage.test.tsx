@@ -21,7 +21,17 @@ vi.mock('../../hooks/useBreakpoint', () => ({
 
 vi.mock('../../api/accounts', () => ({
   fetchAssetAccounts: vi.fn().mockResolvedValue([]),
-  fetchAssetAccountBalances: vi.fn().mockResolvedValue([]),
+  fetchAssetAndLiabilityAccountBalances: vi.fn().mockResolvedValue([]),
+}))
+
+vi.mock('../../api/currencies', () => ({
+  fetchCurrencies: vi.fn().mockResolvedValue([]),
+  findPrimary: vi.fn().mockReturnValue(undefined),
+  findEnabledSecondaries: vi.fn().mockReturnValue([]),
+}))
+
+vi.mock('../../api/exchangeRates', () => ({
+  fetchLatestExchangeRate: vi.fn().mockResolvedValue(null),
 }))
 
 vi.mock('../../api/categories', () => ({
