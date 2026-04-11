@@ -20,7 +20,8 @@ import { useGranularity } from '../hooks/useGranularity'
 import { transformToBreakdownRows } from '../lib/breakdown-transform'
 import { exportBreakdownCSV } from '../lib/csv-export'
 import { exportChartAsPNG } from '../lib/chart-export'
-import { fetchAssetAccountBalances } from '../api/accounts'
+import { fetchAssetAndLiabilityAccountBalances } from '../api/accounts'
+import { useNetWorth } from '../hooks/useNetWorth'
 import type { BreakdownRow } from '../types/breakdown'
 
 export function DashboardPage() {
@@ -38,12 +39,14 @@ export function DashboardPage() {
     availableOptionalFilters,
   } = useFilters()
 
-  const { data: accountBalances, isLoading: balancesLoading } = useQuery({
-    queryKey: ['accountBalances', config?.baseUrl, config?.apiToken],
-    queryFn: () => fetchAssetAccountBalances(config!.baseUrl, config!.apiToken),
+  const { data: accountBalances } = useQuery({
+    queryKey: ['accounts', 'asset,liability', config?.baseUrl],
+    queryFn: () => fetchAssetAndLiabilityAccountBalances(config!.baseUrl, config!.apiToken),
     enabled: !!config,
-    staleTime: 2 * 60 * 1000,
+    staleTime: 60_000,
   })
+
+  const netWorth = useNetWorth(config?.baseUrl ?? '', config?.apiToken ?? '')
 
   const { granularity, updateGranularity } = useGranularity()
   const dashboardData = useDashboardData(filters, granularity)
@@ -96,8 +99,8 @@ export function DashboardPage() {
         />
 
         <AccountBalancePanel
+          netWorth={netWorth}
           accounts={accountBalances ?? []}
-          loading={balancesLoading}
         />
 
         {combinedError && !is401 && (
