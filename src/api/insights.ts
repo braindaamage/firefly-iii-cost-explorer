@@ -73,3 +73,18 @@ export async function fetchInsightExpenseByAssetAccount(
     `/insight/expense/asset?${buildQuery(params)}`
   )
 }
+
+export async function fetchExpenseNoBill(
+  baseUrl: string,
+  token: string,
+  params: { start: string; end: string; currencyCode?: string }
+): Promise<InsightEntry[]> {
+  const client = createApiClient(baseUrl, token)
+  const q = new URLSearchParams()
+  q.set('start', params.start)
+  q.set('end', params.end)
+  if (params.currencyCode) {
+    q.set('currency_code', params.currencyCode)
+  }
+  return client.fetch<InsightEntry[]>(`/insight/expense/no-bill?${q.toString()}`)
+}
