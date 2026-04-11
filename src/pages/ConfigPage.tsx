@@ -12,10 +12,13 @@ export function ConfigPage() {
   useEffect(() => {
     const hash = location.hash.slice(1)
     if (!hash) return
-    const timer = setTimeout(() => {
-      document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth' })
-    }, 100)
-    return () => clearTimeout(timer)
+    // Three retries at 0/100/500ms — scrollIntoView is idempotent, handles late mounts
+    const timers = [0, 100, 500].map((delay) =>
+      setTimeout(() => {
+        document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth' })
+      }, delay)
+    )
+    return () => timers.forEach(clearTimeout)
   }, [location.hash])
 
   return (
