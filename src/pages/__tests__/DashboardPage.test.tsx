@@ -70,6 +70,39 @@ vi.mock('../../lib/chart-export', () => ({
   exportChartAsPNG: vi.fn(),
 }))
 
+vi.mock('../../hooks/useStableToday', () => ({
+  useStableToday: vi.fn(() => new Date('2026-04-15')),
+}))
+
+vi.mock('../../hooks/useForecastConfig', () => ({
+  useForecastConfig: vi.fn(() => ({
+    config: { historyMonths: 3, model: 'weighted' },
+    status: 'success',
+    source: 'default',
+    updateConfig: vi.fn(),
+    retryRemote: vi.fn(),
+  })),
+}))
+
+vi.mock('../../hooks/useForecast', () => ({
+  useForecast: vi.fn(() => ({
+    status: 'loading',
+    currency: null,
+    total: null,
+    mtdSpent: null,
+    variableForecast: null,
+    billsForecast: null,
+    breakdown: {
+      daysInMonth: 0,
+      daysElapsed: 0,
+      daysRemaining: 0,
+      weightedAvgDaily: null,
+      historyMonthsUsed: 0,
+      pendingBills: [],
+    },
+  })),
+}))
+
 function renderPage(initialEntries = ['/']) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
