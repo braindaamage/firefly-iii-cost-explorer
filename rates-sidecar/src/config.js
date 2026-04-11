@@ -14,6 +14,7 @@ const { parseExpression } = cronParser
 
 export const PREFERENCE_KEY = 'costExplorer.ratesSidecar'
 export const LAST_RUN_PREFERENCE_KEY = 'costExplorer.ratesSidecar.lastRun'
+export const RUN_NOW_PREFERENCE_KEY = 'costExplorer.ratesSidecar.runNow'
 
 export const DEFAULTS = Object.freeze({
   version: 1,

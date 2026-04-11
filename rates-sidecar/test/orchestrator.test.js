@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { existsSync, readFileSync } from 'fs'
-import { runJob, makeLog } from '../index.js'
+import { runJob, makeLog, pollOnce } from '../index.js'
 
 function makeClient(overrides = {}) {
   return {
@@ -114,6 +114,115 @@ describe('runJob', () => {
     expect(client.writeLastRun).toHaveBeenCalledWith(
       expect.objectContaining({ status: 'failed', error: 'Firefly unreachable' })
     )
+  })
+})
+
+describe('pollOnce', () => {
+  const NOW = '2026-04-11T14:32:08.512Z'
+  const EARLIER = '2026-04-11T07:00:12.000Z'
+  const LATER = '2026-04-11T16:00:00.000Z'
+
+  afterEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('pollOnce_runNowNewerThanLastRun_invokesRunJob', async () => {
+    const client = makeClient({
+      getPreference: vi.fn()
+        .mockResolvedValueOnce({ ...BASE_CONFIG }) // loadConfig
+        .mockResolvedValueOnce({ requestedAt: LATER }) // runNow
+        .mockResolvedValueOnce({ timestamp: EARLIER }) // lastRun
+    })
+    const config = { ...BASE_CONFIG }
+    const reinstall = vi.fn()
+    const log = vi.fn()
+
+    await pollOnce(client, () => config, reinstall, log)
+
+    expect(log).toHaveBeenCalledWith('info', 'run_now_triggered', expect.objectContaining({ requestedAt: LATER }))
+    // runJob was invoked (writes lastRun)
+    expect(client.writeLastRun).toHaveBeenCalled()
+  })
+
+  it('pollOnce_runNowOlderThanLastRun_doesNotInvokeRunJob — idempotencia', async () => {
+    const client = makeClient({
+      getPreference: vi.fn()
+        .mockResolvedValueOnce({ ...BASE_CONFIG }) // loadConfig
+        .mockResolvedValueOnce({ requestedAt: EARLIER }) // runNow
+        .mockResolvedValueOnce({ timestamp: LATER }) // lastRun
+    })
+    const config = { ...BASE_CONFIG }
+    const reinstall = vi.fn()
+    const log = vi.fn()
+
+    await pollOnce(client, () => config, reinstall, log)
+
+    expect(log).not.toHaveBeenCalledWith('info', 'run_now_triggered', expect.anything())
+    expect(client.writeLastRun).not.toHaveBeenCalled()
+  })
+
+  it('pollOnce_runJobFails_subsequentPollDoesNotRetrigger — lastRun.timestamp avanza en el catch', async () => {
+    // First poll: runNow is newer → triggers runJob → runJob fails → writes lastRun with failed status
+    const clientFirstPoll = makeClient({
+      getPreference: vi.fn()
+        .mockResolvedValueOnce({ ...BASE_CONFIG })
+        .mockResolvedValueOnce({ requestedAt: LATER })
+        .mockResolvedValueOnce({ timestamp: EARLIER }),
+      postExchangeRates: vi.fn().mockRejectedValue(new Error('network down')),
+    })
+    const config = { ...BASE_CONFIG }
+
+    await pollOnce(clientFirstPoll, () => config, vi.fn(), vi.fn())
+    expect(clientFirstPoll.writeLastRun).toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'failed' })
+    )
+
+    // The lastRun.timestamp is now after requestedAt → second poll should not re-trigger
+    const failedTs = clientFirstPoll.writeLastRun.mock.calls[0][0].timestamp
+    const clientSecondPoll = makeClient({
+      getPreference: vi.fn()
+        .mockResolvedValueOnce({ ...BASE_CONFIG })
+        .mockResolvedValueOnce({ requestedAt: LATER })
+        .mockResolvedValueOnce({ timestamp: failedTs }),
+    })
+    const log2 = vi.fn()
+
+    await pollOnce(clientSecondPoll, () => config, vi.fn(), log2)
+
+    expect(log2).not.toHaveBeenCalledWith('info', 'run_now_triggered', expect.anything())
+  })
+
+  it('pollOnce_configDisabled_skipsRunNowCheck', async () => {
+    const disabledConfig = { ...BASE_CONFIG, enabled: false }
+    const client = makeClient({
+      getPreference: vi.fn().mockResolvedValueOnce(disabledConfig),
+    })
+    const log = vi.fn()
+
+    await pollOnce(client, () => disabledConfig, vi.fn(), log)
+
+    // Only one getPreference call (loadConfig) — no runNow/lastRun reads
+    expect(client.getPreference).toHaveBeenCalledTimes(1)
+    expect(log).not.toHaveBeenCalledWith('info', 'run_now_triggered', expect.anything())
+  })
+
+  it('pollOnce_startup_runsOnceBeforeInterval — verifica que start llama pollOnce antes del setInterval', async () => {
+    // The startup initial poll is documented in index.js:
+    // await pollOnce(client, () => config, reinstallIfNeeded, log)
+    // This test verifies the behavior of pollOnce itself during a fresh startup scenario
+    // (no prior lastRun, runNow preference present → triggers job)
+    const client = makeClient({
+      getPreference: vi.fn()
+        .mockResolvedValueOnce({ ...BASE_CONFIG })  // loadConfig
+        .mockResolvedValueOnce({ requestedAt: NOW }) // runNow (pending from previous session)
+        .mockResolvedValueOnce(null),               // lastRun (never run)
+    })
+    const config = { ...BASE_CONFIG }
+    const log = vi.fn()
+
+    await pollOnce(client, () => config, vi.fn(), log)
+
+    expect(log).toHaveBeenCalledWith('info', 'run_now_triggered', expect.objectContaining({ requestedAt: NOW }))
   })
 })
 

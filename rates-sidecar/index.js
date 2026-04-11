@@ -5,8 +5,9 @@
  *   1. Validate env vars (FIREFLY_URL, FIREFLY_PAT required)
  *   2. Load config from Firefly preferences (bootstrap on first run)
  *   3. Install cron job per config.cronSchedule
- *   4. Poll every CONFIG_POLL_INTERVAL_MS (default 5min) for preference changes
- *   5. On SIGHUP: reload config and reinstall cron if needed
+ *   4. Run pollOnce immediately to sweep any pending runNow requests from previous sessions
+ *   5. Poll every CONFIG_POLL_INTERVAL_MS (default 5min) for preference changes + runNow
+ *   6. On SIGHUP: reload config and reinstall cron if needed
  *
  * Config split (§10.3):
  *   - env: FIREFLY_URL, FIREFLY_PAT, TZ, LOG_LEVEL, CONFIG_POLL_INTERVAL_MS
@@ -19,8 +20,15 @@ import cronParser from 'cron-parser'
 const { parseExpression } = cronParser
 import cron from 'node-cron'
 import { createFireflyClient } from './src/firefly-client.js'
-import { loadConfig, requiresCronReinstall, PREFERENCE_KEY } from './src/config.js'
+import {
+  loadConfig,
+  requiresCronReinstall,
+  PREFERENCE_KEY,
+  LAST_RUN_PREFERENCE_KEY,
+  RUN_NOW_PREFERENCE_KEY,
+} from './src/config.js'
 import { fetchRates } from './src/rates-fetchers.js'
+import { shouldTriggerRunNow } from './src/run-now.js'
 
 // --- Env vars ---
 const FIREFLY_URL = process.env.FIREFLY_URL
@@ -143,6 +151,40 @@ function installCronJob(schedule, jobFn, log) {
   return task
 }
 
+/**
+ * Executes one poll cycle: reload config, reinstall cron if needed, and check
+ * for a pending runNow request. Exported for unit testing.
+ *
+ * NOTE: If the cron timer fires concurrently while runJob is running out-of-band,
+ * both executions write to lastRun independently (last write wins). Acceptable for v1
+ * since both paths are idempotent POST operations against Firefly III.
+ *
+ * @param {object} client - FireflyClient instance
+ * @param {function} getConfig - () => currentConfig (allows closure mutation)
+ * @param {function} reinstallIfNeeded - (newConfig) => void
+ * @param {function} log - structured logger
+ */
+export async function pollOnce(client, getConfig, reinstallIfNeeded, log) {
+  try {
+    const newConfig = await loadConfig(client, log)
+    reinstallIfNeeded(newConfig)
+
+    // Only check runNow when enabled — guard against unnecessary preference reads
+    if (getConfig().enabled) {
+      const [runNowPref, lastRun] = await Promise.all([
+        client.getPreference(RUN_NOW_PREFERENCE_KEY),
+        client.getPreference(LAST_RUN_PREFERENCE_KEY),
+      ])
+      if (shouldTriggerRunNow(runNowPref, lastRun)) {
+        log('info', 'run_now_triggered', { requestedAt: runNowPref.requestedAt })
+        await runJob(getConfig(), client, log)
+      }
+    }
+  } catch (err) {
+    log('warn', 'poll_failed', { error: err.message })
+  }
+}
+
 // --- Main startup (runs only when executed as the main module) ---
 export async function start(client, log) {
   log('info', 'sidecar_startup', { firefly_url: FIREFLY_URL })
@@ -175,26 +217,21 @@ export async function start(client, log) {
     log('info', 'sidecar_disabled', { message: 'enabled=false at startup, waiting for poll to re-enable' })
   }
 
-  // Poll every CONFIG_POLL_INTERVAL_MS for preference changes
-  const pollInterval = setInterval(async () => {
-    try {
-      const newConfig = await loadConfig(client, log)
-      reinstallIfNeeded(newConfig)
-    } catch (err) {
-      log('warn', 'config_poll_failed', { error: err.message })
-    }
-  }, CONFIG_POLL_INTERVAL_MS)
+  // Startup initial poll: sweep any pending runNow requests from previous sessions
+  // (e.g., user clicked "Run now" while the sidecar was restarting)
+  await pollOnce(client, () => config, reinstallIfNeeded, log)
+
+  // Poll every CONFIG_POLL_INTERVAL_MS for preference changes and runNow checks
+  const pollInterval = setInterval(
+    () => pollOnce(client, () => config, reinstallIfNeeded, log),
+    CONFIG_POLL_INTERVAL_MS
+  )
   pollInterval.unref()  // don't prevent process exit
 
   // SIGHUP: reload config immediately
   process.on('SIGHUP', async () => {
     log('info', 'sighup_received', { message: 'Reloading config' })
-    try {
-      const newConfig = await loadConfig(client, log)
-      reinstallIfNeeded(newConfig)
-    } catch (err) {
-      log('warn', 'sighup_config_reload_failed', { error: err.message })
-    }
+    await pollOnce(client, () => config, reinstallIfNeeded, log)
   })
 }
 
