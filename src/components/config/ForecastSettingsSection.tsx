@@ -45,13 +45,16 @@ export function ForecastSettingsSection({ baseUrl, token }: ForecastSettingsSect
   // Local draft — syncs from remote config on initial load and after save
   const [localConfig, setLocalConfig] = useState<ForecastConfig>(config)
 
-  // Sync local draft when remote config changes (first load, after successful save, after retry)
-  useEffect(() => {
-    setLocalConfig({ historyMonths: config.historyMonths, model: config.model })
-  }, [config.historyMonths, config.model])
-
   const isDirty =
     localConfig.historyMonths !== config.historyMonths || localConfig.model !== config.model
+
+  // Sync local draft when remote config changes, but only when there are no unsaved edits.
+  // Guard preserves the user's draft across retries and remote refetches.
+  useEffect(() => {
+    if (!isDirty) {
+      setLocalConfig({ historyMonths: config.historyMonths, model: config.model })
+    }
+  }, [config.historyMonths, config.model, isDirty])
 
   if (status === 'loading') {
     return (

@@ -91,4 +91,25 @@ describe('ForecastSettingsSection', () => {
     render(<ForecastSettingsSection baseUrl="https://firefly.example.com" token="token" />)
     expect(screen.getByText(/more months.*stable/i)).toBeInTheDocument()
   })
+
+  it('preserves local edits when remote config changes with unsaved draft (B1 guard)', async () => {
+    const { useForecastConfig } = await import('../../../hooks/useForecastConfig')
+
+    // Initial config: historyMonths=3
+    vi.mocked(useForecastConfig).mockReturnValue({ ...BASE_RETURN, config: { historyMonths: 3, model: 'weighted' } })
+    const { rerender } = render(
+      <ForecastSettingsSection baseUrl="https://firefly.example.com" token="token" />
+    )
+
+    // User changes local draft to 9 → isDirty=true
+    await userEvent.selectOptions(screen.getByLabelText('History Months'), '9')
+    expect(screen.getByLabelText('History Months')).toHaveValue('9')
+
+    // Remote config changes to historyMonths=6 (e.g., Retry returned a different value)
+    vi.mocked(useForecastConfig).mockReturnValue({ ...BASE_RETURN, config: { historyMonths: 6, model: 'weighted' } })
+    rerender(<ForecastSettingsSection baseUrl="https://firefly.example.com" token="token" />)
+
+    // Local draft must NOT be clobbered — user's 9 is still selected
+    expect(screen.getByLabelText('History Months')).toHaveValue('9')
+  })
 })
