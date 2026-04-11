@@ -24,6 +24,7 @@ export interface NetWorthResult {
   secondaries: NetWorthConvertedValue[]
   excludedAccounts: { id: string; name: string; currencyCode: string }[]
   fallbackPerCurrency: { currencyCode: string; symbol: string; decimalPlaces: number; total: number }[]
+  netByCurrency: { currencyCode: string; symbol: string; decimalPlaces: number; total: number }[]
 }
 
 export interface RateQueryState {
@@ -47,6 +48,7 @@ const LOADING_RESULT: NetWorthResult = {
   secondaries: [],
   excludedAccounts: [],
   fallbackPerCurrency: [],
+  netByCurrency: [],
 }
 
 const ERROR_RESULT: NetWorthResult = {
@@ -56,9 +58,10 @@ const ERROR_RESULT: NetWorthResult = {
   secondaries: [],
   excludedAccounts: [],
   fallbackPerCurrency: [],
+  netByCurrency: [],
 }
 
-function buildFallbackPerCurrency(
+function buildNetByCurrency(
   activeAccounts: Account[]
 ): { currencyCode: string; symbol: string; decimalPlaces: number; total: number }[] {
   const map = new Map<string, { symbol: string; decimalPlaces: number; total: number }>()
@@ -105,17 +108,20 @@ export function computeNetWorth(inputs: ComputeNetWorthInputs): NetWorthResult {
       secondaries: [],
       excludedAccounts: [],
       fallbackPerCurrency: [],
+      netByCurrency: [],
     }
   }
 
   if (primary === undefined) {
+    const built = buildNetByCurrency(activeAccounts)
     return {
       status: 'unavailable',
       primaryTotal: null,
       primaryCurrency: null,
       secondaries: [],
       excludedAccounts: [],
-      fallbackPerCurrency: buildFallbackPerCurrency(activeAccounts),
+      fallbackPerCurrency: built,
+      netByCurrency: built,
     }
   }
 
@@ -140,13 +146,15 @@ export function computeNetWorth(inputs: ComputeNetWorthInputs): NetWorthResult {
 
   // Step 6: all without pc → feature unavailable, show fallback per-currency
   if (withPc.length === 0) {
+    const built = buildNetByCurrency(activeAccounts)
     return {
       status: 'unavailable',
       primaryTotal: null,
       primaryCurrency,
       secondaries: [],
       excludedAccounts: [],
-      fallbackPerCurrency: buildFallbackPerCurrency(activeAccounts),
+      fallbackPerCurrency: built,
+      netByCurrency: built,
     }
   }
 
@@ -216,5 +224,6 @@ export function computeNetWorth(inputs: ComputeNetWorthInputs): NetWorthResult {
     secondaries: secondaryValues,
     excludedAccounts,
     fallbackPerCurrency: [],
+    netByCurrency: buildNetByCurrency(activeAccounts),
   }
 }

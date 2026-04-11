@@ -36,6 +36,7 @@ const LOADING: NetWorthResult = {
   secondaries: [],
   excludedAccounts: [],
   fallbackPerCurrency: [],
+  netByCurrency: [],
 }
 
 const ERROR: NetWorthResult = {
@@ -45,6 +46,7 @@ const ERROR: NetWorthResult = {
   secondaries: [],
   excludedAccounts: [],
   fallbackPerCurrency: [],
+  netByCurrency: [],
 }
 
 const OK: NetWorthResult = {
@@ -56,6 +58,9 @@ const OK: NetWorthResult = {
   ],
   excludedAccounts: [],
   fallbackPerCurrency: [],
+  netByCurrency: [
+    { currencyCode: 'EUR', symbol: '€', decimalPlaces: 2, total: 8845.67 },
+  ],
 }
 
 const OK_TWO_SECONDARIES: NetWorthResult = {
@@ -68,6 +73,10 @@ const OK_TWO_SECONDARIES: NetWorthResult = {
   ],
   excludedAccounts: [],
   fallbackPerCurrency: [],
+  netByCurrency: [
+    { currencyCode: 'CLP', symbol: 'CLP', decimalPlaces: 0, total: 4000000 },
+    { currencyCode: 'EUR', symbol: '€', decimalPlaces: 2, total: 5000 },
+  ],
 }
 
 const OK_CLP_PRIMARY: NetWorthResult = {
@@ -77,6 +86,9 @@ const OK_CLP_PRIMARY: NetWorthResult = {
   secondaries: [],
   excludedAccounts: [],
   fallbackPerCurrency: [],
+  netByCurrency: [
+    { currencyCode: 'CLP', symbol: 'CLP', decimalPlaces: 0, total: 500000 },
+  ],
 }
 
 const PARTIAL: NetWorthResult = {
@@ -89,6 +101,9 @@ const PARTIAL: NetWorthResult = {
     { id: '3', name: 'CLP Account', currencyCode: 'CLP' },
   ],
   fallbackPerCurrency: [],
+  netByCurrency: [
+    { currencyCode: 'EUR', symbol: '€', decimalPlaces: 2, total: 6000 },
+  ],
 }
 
 const PARTIAL_SECONDARY_SOME: NetWorthResult = {
@@ -101,6 +116,9 @@ const PARTIAL_SECONDARY_SOME: NetWorthResult = {
   ],
   excludedAccounts: [],
   fallbackPerCurrency: [],
+  netByCurrency: [
+    { currencyCode: 'EUR', symbol: '€', decimalPlaces: 2, total: 5000 },
+  ],
 }
 
 const PARTIAL_SECONDARY_ALL: NetWorthResult = {
@@ -113,6 +131,9 @@ const PARTIAL_SECONDARY_ALL: NetWorthResult = {
   ],
   excludedAccounts: [],
   fallbackPerCurrency: [],
+  netByCurrency: [
+    { currencyCode: 'EUR', symbol: '€', decimalPlaces: 2, total: 5000 },
+  ],
 }
 
 const UNAVAILABLE: NetWorthResult = {
@@ -122,6 +143,10 @@ const UNAVAILABLE: NetWorthResult = {
   secondaries: [],
   excludedAccounts: [],
   fallbackPerCurrency: [
+    { currencyCode: 'EUR', symbol: '€', decimalPlaces: 2, total: 1000 },
+    { currencyCode: 'USD', symbol: '$', decimalPlaces: 2, total: 500 },
+  ],
+  netByCurrency: [
     { currencyCode: 'EUR', symbol: '€', decimalPlaces: 2, total: 1000 },
     { currencyCode: 'USD', symbol: '$', decimalPlaces: 2, total: 500 },
   ],
@@ -136,6 +161,9 @@ const UNAVAILABLE_CLP: NetWorthResult = {
   fallbackPerCurrency: [
     { currencyCode: 'CLP', symbol: 'CLP', decimalPlaces: 0, total: 6609492 },
   ],
+  netByCurrency: [
+    { currencyCode: 'CLP', symbol: 'CLP', decimalPlaces: 0, total: 6609492 },
+  ],
 }
 
 const UNAVAILABLE_NO_FALLBACK: NetWorthResult = {
@@ -145,6 +173,7 @@ const UNAVAILABLE_NO_FALLBACK: NetWorthResult = {
   secondaries: [],
   excludedAccounts: [],
   fallbackPerCurrency: [],
+  netByCurrency: [],
 }
 
 const threeAccounts: Account[] = [
@@ -463,5 +492,89 @@ describe('AccountBalancePanel — responsive: desktop', () => {
     render(<AccountBalancePanel netWorth={OK} accounts={singleAccount} />)
     const card = screen.getByTestId('account-card')
     expect(card.parentElement).toHaveStyle({ overflowX: 'auto' })
+  })
+})
+
+// ─── Tests — tier 2: net by currency ─────────────────────────────────────────
+
+describe('AccountBalancePanel — tier 2: net by currency', () => {
+  beforeEach(() => vi.mocked(useBreakpoint).mockReturnValue('desktop'))
+
+  const OK_THREE_CURRENCIES: NetWorthResult = {
+    status: 'ok',
+    primaryTotal: 5000,
+    primaryCurrency: { code: 'EUR', symbol: '€', decimalPlaces: 2 },
+    secondaries: [],
+    excludedAccounts: [],
+    fallbackPerCurrency: [],
+    netByCurrency: [
+      { currencyCode: 'CLP', symbol: 'CLP', decimalPlaces: 0, total: 4350000 },
+      { currencyCode: 'EUR', symbol: '€', decimalPlaces: 2, total: 547.5 },
+      { currencyCode: 'USD', symbol: '$', decimalPlaces: 2, total: 120 },
+    ],
+  }
+
+  const PARTIAL_WITH_NBC: NetWorthResult = {
+    ...PARTIAL,
+    netByCurrency: [
+      { currencyCode: 'EUR', symbol: '€', decimalPlaces: 2, total: 6000 },
+    ],
+  }
+
+  const PARTIAL_SECONDARY_WITH_NBC: NetWorthResult = {
+    ...PARTIAL_SECONDARY_SOME,
+    netByCurrency: [
+      { currencyCode: 'EUR', symbol: '€', decimalPlaces: 2, total: 5000 },
+    ],
+  }
+
+  const NEGATIVE_NBC: NetWorthResult = {
+    status: 'ok',
+    primaryTotal: -19784.31,
+    primaryCurrency: { code: 'EUR', symbol: '€', decimalPlaces: 2 },
+    secondaries: [],
+    excludedAccounts: [],
+    fallbackPerCurrency: [],
+    netByCurrency: [
+      { currencyCode: 'CLP', symbol: 'CLP', decimalPlaces: 0, total: -19000000 },
+      { currencyCode: 'EUR', symbol: '€', decimalPlaces: 2, total: -19784.31 },
+    ],
+  }
+
+  it('renders net-by-currency tier in ok state with label and values', () => {
+    render(<AccountBalancePanel netWorth={OK_THREE_CURRENCIES} accounts={[]} />)
+    expect(screen.getByTestId('net-by-currency-label')).toBeInTheDocument()
+    expect(screen.getByTestId('net-by-currency-label')).toHaveTextContent('Por moneda')
+    expect(screen.getByTestId('net-by-currency-CLP')).toBeInTheDocument()
+    expect(screen.getByTestId('net-by-currency-EUR')).toBeInTheDocument()
+    expect(screen.getByTestId('net-by-currency-USD')).toBeInTheDocument()
+  })
+
+  it('renders net-by-currency tier in partial state', () => {
+    render(<AccountBalancePanel netWorth={PARTIAL_WITH_NBC} accounts={[]} />)
+    expect(screen.getByTestId('net-by-currency-label')).toBeInTheDocument()
+    expect(screen.getByTestId('net-by-currency-EUR')).toBeInTheDocument()
+  })
+
+  it('renders net-by-currency tier in partialSecondary state', () => {
+    render(<AccountBalancePanel netWorth={PARTIAL_SECONDARY_WITH_NBC} accounts={[]} />)
+    expect(screen.getByTestId('net-by-currency-label')).toBeInTheDocument()
+    expect(screen.getByTestId('net-by-currency-EUR')).toBeInTheDocument()
+  })
+
+  it('does NOT render net-by-currency tier in unavailable state', () => {
+    render(<AccountBalancePanel netWorth={UNAVAILABLE} accounts={[]} />)
+    expect(screen.queryByTestId('net-by-currency-label')).not.toBeInTheDocument()
+  })
+
+  it('does NOT render net-by-currency tier in loading state', () => {
+    render(<AccountBalancePanel netWorth={LOADING} accounts={[]} />)
+    expect(screen.queryByTestId('net-by-currency-label')).not.toBeInTheDocument()
+  })
+
+  it('net-by-currency renders negative values in red', () => {
+    render(<AccountBalancePanel netWorth={NEGATIVE_NBC} accounts={[]} />)
+    expect(screen.getByTestId('net-by-currency-value-CLP')).toHaveStyle({ color: '#f28b82' })
+    expect(screen.getByTestId('net-by-currency-value-EUR')).toHaveStyle({ color: '#f28b82' })
   })
 })

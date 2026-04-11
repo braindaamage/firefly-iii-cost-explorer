@@ -84,6 +84,64 @@ function SkeletonPanel({ breakpoint }: { breakpoint: Breakpoint }) {
   )
 }
 
+// ─── Net By Currency row (tier 2) ─────────────────────────────────────────────
+
+interface NetByCurrencyRowProps {
+  netByCurrency: NetWorthResult['netByCurrency']
+  isCompact: boolean
+  fontSize: string
+}
+
+function NetByCurrencyRow({ netByCurrency, isCompact, fontSize }: NetByCurrencyRowProps) {
+  if (netByCurrency.length === 0) return null
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '12px' }}>
+      <div
+        data-testid="net-by-currency-label"
+        style={{
+          fontFamily: "'Roboto', sans-serif",
+          color: '#9aa0a6',
+          fontSize: '12px',
+          fontWeight: 500,
+        }}
+      >
+        Por moneda
+      </div>
+      <div
+        data-testid="net-by-currency-values"
+        style={
+          isCompact
+            ? { display: 'flex', flexDirection: 'column' as const, gap: '4px' }
+            : { display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' as const }
+        }
+      >
+        {netByCurrency.map((e, i) => (
+          <span
+            key={e.currencyCode}
+            data-testid={`net-by-currency-${e.currencyCode}`}
+            style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            {!isCompact && i > 0 && (
+              <span style={{ color: '#9aa0a6', fontSize: '14px', lineHeight: '1' }}>·</span>
+            )}
+            <span
+              data-testid={`net-by-currency-value-${e.currencyCode}`}
+              style={{
+                fontFamily: "'Roboto', sans-serif",
+                color: e.total < 0 ? '#f28b82' : '#e8eaed',
+                fontSize,
+                fontWeight: 500,
+              }}
+            >
+              {formatCurrency(e.total, e.currencyCode, e.decimalPlaces)}
+            </span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Warning chip ─────────────────────────────────────────────────────────────
 
 interface WarningChipProps {
@@ -375,6 +433,15 @@ export function AccountBalancePanel({ netWorth, accounts }: AccountBalancePanelP
           sublineFontSize={sublineFontSize}
         />
         <WarningChipsRow netWorth={netWorth} />
+        {(netWorth.status === 'ok' ||
+          netWorth.status === 'partial' ||
+          netWorth.status === 'partialSecondary') && (
+          <NetByCurrencyRow
+            netByCurrency={netWorth.netByCurrency}
+            isCompact={isCompact}
+            fontSize={isCompact ? '14px' : '16px'}
+          />
+        )}
       </div>
 
       {/* Unavailable info banner */}
