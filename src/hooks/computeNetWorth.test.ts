@@ -86,10 +86,12 @@ describe('computeNetWorth', () => {
   })
 
   it('computeNetWorth_allPcNull_returnsUnavailableWithFallback', () => {
+    // Fix 5: insert CLP account first to verify sort is alphabetical (CLP < EUR < USD)
     const accounts = [
-      makeAccount({ id: '1', currencyCode: 'EUR', currencySymbol: '€', currentBalance: 600, pcCurrentBalance: null }),
-      makeAccount({ id: '2', currencyCode: 'EUR', currencySymbol: '€', currentBalance: 400, pcCurrentBalance: null }),
-      makeAccount({ id: '3', currencyCode: 'USD', currencySymbol: '$', currentBalance: 200, pcCurrentBalance: null }),
+      makeAccount({ id: '1', currencyCode: 'USD', currencySymbol: '$', currentBalance: 200, pcCurrentBalance: null }),
+      makeAccount({ id: '2', currencyCode: 'EUR', currencySymbol: '€', currentBalance: 600, pcCurrentBalance: null }),
+      makeAccount({ id: '3', currencyCode: 'EUR', currencySymbol: '€', currentBalance: 400, pcCurrentBalance: null }),
+      makeAccount({ id: '4', currencyCode: 'CLP', currencySymbol: 'CLP', currentBalance: 500, pcCurrentBalance: null }),
     ]
 
     const result = computeNetWorth(baseInputs({ accounts }))
@@ -99,6 +101,10 @@ describe('computeNetWorth', () => {
     expect(result.secondaries).toHaveLength(0)
     expect(result.excludedAccounts).toHaveLength(0)
 
+    // Fix 5: verify alphabetical sort
+    expect(result.fallbackPerCurrency.map((f) => f.currencyCode)).toEqual(['CLP', 'EUR', 'USD'])
+    const clp = result.fallbackPerCurrency.find((f) => f.currencyCode === 'CLP')
+    expect(clp?.total).toBe(500)
     const eur = result.fallbackPerCurrency.find((f) => f.currencyCode === 'EUR')
     expect(eur?.total).toBe(1000)
     const usd = result.fallbackPerCurrency.find((f) => f.currencyCode === 'USD')
@@ -278,5 +284,29 @@ describe('computeNetWorth', () => {
     expect(result.status).toBe('ok')           // not 'partial'
     expect(result.excludedAccounts).toHaveLength(0)
     expect(result.primaryTotal).toBe(500)      // 0 + 500
+  })
+
+  // Fix 6: primary === undefined with active accounts → unavailable with populated fallback (spec §8.2)
+  it('returns unavailable with populated fallback when primary is undefined', () => {
+    const accounts = [
+      makeAccount({ id: '1', name: 'Savings EUR', currencyCode: 'EUR', currencySymbol: '€', currentBalance: 100, pcCurrentBalance: null }),
+      makeAccount({ id: '2', name: 'Savings USD', currencyCode: 'USD', currencySymbol: '$', currentBalance: 200, pcCurrentBalance: null }),
+    ]
+
+    const result = computeNetWorth(baseInputs({
+      accounts,
+      primary: undefined,
+      currencies: [],
+    }))
+
+    expect(result.status).toBe('unavailable')
+    expect(result.primaryCurrency).toBeNull()
+    expect(result.primaryTotal).toBeNull()
+    expect(result.secondaries).toHaveLength(0)
+    expect(result.excludedAccounts).toHaveLength(0)
+    expect(result.fallbackPerCurrency).toHaveLength(2)
+    expect(result.fallbackPerCurrency.map((f) => f.currencyCode)).toEqual(['EUR', 'USD'])
+    expect(result.fallbackPerCurrency.find((f) => f.currencyCode === 'EUR')?.total).toBe(100)
+    expect(result.fallbackPerCurrency.find((f) => f.currencyCode === 'USD')?.total).toBe(200)
   })
 })

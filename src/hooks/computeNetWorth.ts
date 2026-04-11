@@ -90,8 +90,12 @@ export function computeNetWorth(inputs: ComputeNetWorthInputs): NetWorthResult {
     return ERROR_RESULT
   }
 
-  // Step 3: no primary defined → unavailable (spec §8.2)
-  if (primary === undefined) {
+  // Step 3: filter inactive accounts (spec §8.6)
+  const activeAccounts = accounts.filter((a) => a.active)
+
+  // Fix 6: empty accounts → nothing to show; primary undefined → show fallback with available accounts
+  // These are two distinct cases (spec §8.2 + matrix row #6)
+  if (activeAccounts.length === 0) {
     return {
       status: 'unavailable',
       primaryTotal: null,
@@ -102,17 +106,14 @@ export function computeNetWorth(inputs: ComputeNetWorthInputs): NetWorthResult {
     }
   }
 
-  // Step 4: filter inactive accounts (spec §8.6)
-  const activeAccounts = accounts.filter((a) => a.active)
-
-  if (activeAccounts.length === 0) {
+  if (primary === undefined) {
     return {
       status: 'unavailable',
       primaryTotal: null,
-      primaryCurrency: { code: primary.code, symbol: primary.symbol, decimalPlaces: primary.decimalPlaces },
+      primaryCurrency: null,
       secondaries: [],
       excludedAccounts: [],
-      fallbackPerCurrency: [],
+      fallbackPerCurrency: buildFallbackPerCurrency(activeAccounts),
     }
   }
 
