@@ -1,5 +1,8 @@
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { useNetWorth } from '../../hooks/useNetWorth'
+import { fetchAssetAndLiabilityAccountBalances } from '../../api/accounts'
 import { formatCurrency } from '../../lib/format-currency'
 import type { Account } from '../../api/accounts'
 import type { NetWorthResult, NetWorthConvertedValue } from '../../hooks/computeNetWorth'
@@ -7,8 +10,8 @@ import type { NetWorthResult, NetWorthConvertedValue } from '../../hooks/compute
 type Breakpoint = 'mobile' | 'tablet' | 'desktop'
 
 interface AccountBalancePanelProps {
-  netWorth: NetWorthResult
-  accounts: Account[]
+  baseUrl: string
+  token: string
 }
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
@@ -88,57 +91,30 @@ function SkeletonPanel({ breakpoint }: { breakpoint: Breakpoint }) {
 
 interface WarningChipProps {
   label: string
-  details?: string
+  title?: string
   testId?: string
 }
 
-function WarningChip({ label, details, testId }: WarningChipProps) {
-  const [open, setOpen] = useState(false)
-
+function WarningChip({ label, title, testId }: WarningChipProps) {
   return (
-    <span style={{ position: 'relative', display: 'inline-flex', flexDirection: 'column' }}>
-      <button
-        data-testid={testId ?? 'warning-chip'}
-        onClick={() => setOpen((v) => !v)}
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '4px',
-          padding: '2px 8px',
-          borderRadius: '12px',
-          border: 'none',
-          cursor: 'pointer',
-          backgroundColor: '#3c2e0033',
-          color: '#f9ab00',
-          fontSize: '12px',
-          fontWeight: 500,
-          fontFamily: "'Roboto', sans-serif",
-        }}
-      >
-        ⚠ {label}
-      </button>
-      {open && details && (
-        <div
-          data-testid={testId ? `${testId}-tooltip` : 'warning-chip-tooltip'}
-          style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            zIndex: 100,
-            backgroundColor: '#2d2d2d',
-            border: '1px solid #3c4043',
-            borderRadius: '6px',
-            padding: '8px 12px',
-            fontSize: '12px',
-            color: '#e8eaed',
-            fontFamily: "'Roboto', sans-serif",
-            whiteSpace: 'pre-wrap',
-            minWidth: '180px',
-          }}
-        >
-          {details}
-        </div>
-      )}
+    <span
+      data-testid={testId ?? 'warning-chip'}
+      title={title}
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '4px',
+        padding: '2px 8px',
+        borderRadius: '12px',
+        backgroundColor: '#3c2e0033',
+        color: '#f9ab00',
+        fontSize: '12px',
+        fontWeight: 500,
+        fontFamily: "'Roboto', sans-serif",
+        cursor: title ? 'help' : 'default',
+      }}
+    >
+      ⚠ {label}
     </span>
   )
 }
@@ -175,7 +151,7 @@ function UnavailableBanner() {
   )
 }
 
-// ─── Net Worth header section ─────────────────────────────────────────────────
+// ─── Net Worth header ─────────────────────────────────────────────────────────
 
 interface NetWorthHeaderProps {
   netWorth: NetWorthResult
@@ -187,40 +163,27 @@ interface NetWorthHeaderProps {
 function NetWorthHeader({ netWorth, isCompact, primaryFontSize, sublineFontSize }: NetWorthHeaderProps) {
   const { status } = netWorth
 
-  // error state
   if (status === 'error') {
     return (
       <div
         data-testid="net-worth-error"
-        style={{
-          fontFamily: "'Roboto', sans-serif",
-          color: '#f28b82',
-          fontSize: '14px',
-        }}
+        style={{ fontFamily: "'Roboto', sans-serif", color: '#f28b82', fontSize: '14px' }}
       >
-        Error loading account data. Please try again.
+        Failed to load balances. Please try again.
       </div>
     )
   }
 
-  // unavailable state: show fallback per-currency
   if (status === 'unavailable') {
     const { fallbackPerCurrency } = netWorth
     if (fallbackPerCurrency.length === 0) return null
-
     return (
       <div
         data-testid="net-worth-fallback"
         style={
           isCompact
-            ? { display: 'flex', flexDirection: 'column', gap: '4px' }
-            : {
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                flexWrap: 'wrap',
-                overflowWrap: 'anywhere' as const,
-              }
+            ? { display: 'flex', flexDirection: 'column' as const, gap: '4px' }
+            : { display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' as const }
         }
       >
         {fallbackPerCurrency.map((f, i) => (
@@ -249,19 +212,14 @@ function NetWorthHeader({ netWorth, isCompact, primaryFontSize, sublineFontSize 
     )
   }
 
-  // ok / partial / partialSecondary
   if (netWorth.primaryTotal === null || netWorth.primaryCurrency === null) return null
 
   const { primaryTotal, primaryCurrency, secondaries } = netWorth
-
-  // Which secondaries have values
   const visibleSecondaries = secondaries.filter((s) => s.value !== null)
-  const missingSecondaries = secondaries.filter((s) => s.value === null)
-  const allSecondariesMissing = secondaries.length > 0 && missingSecondaries.length === secondaries.length
+  const allSecondariesMissing = secondaries.length > 0 && visibleSecondaries.length === 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-      {/* Primary total */}
       <div
         data-testid="net-worth-primary"
         style={{
@@ -274,26 +232,15 @@ function NetWorthHeader({ netWorth, isCompact, primaryFontSize, sublineFontSize 
         {formatCurrency(primaryTotal, primaryCurrency.code, primaryCurrency.decimalPlaces)}
       </div>
 
-      {/* Subline: secondary conversions (only when there are visible ones) */}
       {visibleSecondaries.length > 0 && !allSecondariesMissing && (
         <div
           data-testid="net-worth-subline"
-          style={
-            isCompact
-              ? {
-                  display: 'flex',
-                  flexWrap: 'wrap' as const,
-                  gap: '4px 12px',
-                  overflowWrap: 'anywhere' as const,
-                }
-              : {
-                  display: 'flex',
-                  alignItems: 'center',
-                  flexWrap: 'wrap' as const,
-                  gap: '4px 8px',
-                  overflowWrap: 'anywhere' as const,
-                }
-          }
+          style={{
+            display: 'flex',
+            flexWrap: 'wrap' as const,
+            gap: '4px 12px',
+            overflowWrap: 'anywhere' as const,
+          }}
         >
           {visibleSecondaries.map((sec: NetWorthConvertedValue, i) => (
             <span key={sec.currencyCode} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -325,63 +272,66 @@ function WarningChipsRow({ netWorth }: { netWorth: NetWorthResult }) {
   const { status } = netWorth
   if (status !== 'partial' && status !== 'partialSecondary') return null
 
-  const excludedChip =
-    status === 'partial' && netWorth.excludedAccounts.length > 0 ? (
-      <WarningChip
-        key="excluded"
-        testId="chip-excluded"
-        label={`${netWorth.excludedAccounts.length} cuentas excluidas`}
-        details={netWorth.excludedAccounts
-          .map((a) => `${a.name} (${a.currencyCode})`)
-          .join('\n')}
-      />
-    ) : null
-
   const missingSecondaries = netWorth.secondaries.filter((s) => s.value === null)
-  const allMissing = netWorth.secondaries.length > 0 && missingSecondaries.length === netWorth.secondaries.length
+  const allSecondariesMissing =
+    netWorth.secondaries.length > 0 && missingSecondaries.length === netWorth.secondaries.length
 
-  const secondaryChips = allMissing ? (
-    <WarningChip
-      key="all-rates-missing"
-      testId="chip-all-rates-missing"
-      label="No secondary rates available"
-      details="No hay tasas de cambio disponibles para las monedas secundarias. Configurá las tasas en Firefly III."
-    />
-  ) : (
-    missingSecondaries.map((s) => (
-      <WarningChip
-        key={s.currencyCode}
-        testId={`chip-rate-missing-${s.currencyCode}`}
-        label={`${s.currencyCode} rate missing`}
-        details={`Configurá la tasa de cambio para ${s.currencyCode} en Firefly III.`}
-      />
-    ))
-  )
+  const hasExcluded = status === 'partial' && netWorth.excludedAccounts.length > 0
+  const hasMissing = missingSecondaries.length > 0
 
-  const chips = [excludedChip, ...(Array.isArray(secondaryChips) ? secondaryChips : [secondaryChips])]
-    .filter(Boolean)
-
-  if (chips.length === 0) return null
+  if (!hasExcluded && !hasMissing) return null
 
   return (
     <div
       data-testid="warning-chips"
-      style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}
+      style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px' }}
     >
-      {chips}
+      {hasExcluded && (
+        <WarningChip
+          testId="chip-excluded"
+          label={`${netWorth.excludedAccounts.length} cuentas excluidas`}
+          title={netWorth.excludedAccounts.map((a) => `${a.name} (${a.currencyCode})`).join('\n')}
+        />
+      )}
+      {allSecondariesMissing ? (
+        <WarningChip
+          testId="chip-all-rates-missing"
+          label="No secondary rates available"
+          title="No hay tasas de cambio disponibles para las monedas secundarias. Configurá las tasas en Firefly III."
+        />
+      ) : (
+        missingSecondaries.map((s) => (
+          <WarningChip
+            key={s.currencyCode}
+            testId={`chip-rate-missing-${s.currencyCode}`}
+            label={`${s.currencyCode} rate missing`}
+            title={`Configurá la tasa de cambio para ${s.currencyCode} en Firefly III.`}
+          />
+        ))
+      )}
     </div>
   )
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AccountBalancePanel({ netWorth, accounts }: AccountBalancePanelProps) {
+export function AccountBalancePanel({ baseUrl, token }: AccountBalancePanelProps) {
   const breakpoint = useBreakpoint()
   const isCompact = breakpoint !== 'desktop'
 
   const primaryFontSize = isCompact ? '26px' : '32px'
   const sublineFontSize = isCompact ? '12px' : '14px'
   const balanceFontSize = { mobile: '14px', tablet: '15px', desktop: '16px' }[breakpoint]
+
+  const netWorth = useNetWorth(baseUrl, token)
+
+  // Shared cache key with useNetWorth — TanStack Query deduplicates to one request
+  const { data: accountsData } = useQuery({
+    queryKey: ['accounts', 'asset,liability', baseUrl],
+    queryFn: () => fetchAssetAndLiabilityAccountBalances(baseUrl, token),
+    enabled: !!baseUrl && !!token,
+    staleTime: 60_000,
+  })
 
   const cardsStyle =
     breakpoint === 'desktop'
@@ -393,8 +343,9 @@ export function AccountBalancePanel({ netWorth, accounts }: AccountBalancePanelP
   const cardPadding = breakpoint === 'mobile' ? '10px 12px' : '12px 16px'
 
   const sortedAccounts = useMemo(() => {
+    const active = (accountsData ?? []).filter((a: Account) => a.active)
     const byCurrency = new Map<string, Account[]>()
-    accounts.forEach((acc) => {
+    active.forEach((acc) => {
       const group = byCurrency.get(acc.currencyCode) ?? []
       group.push(acc)
       byCurrency.set(acc.currencyCode, group)
@@ -402,7 +353,7 @@ export function AccountBalancePanel({ netWorth, accounts }: AccountBalancePanelP
     return Array.from(byCurrency.values()).flatMap((group) =>
       group.sort((a, b) => b.currentBalance - a.currentBalance)
     )
-  }, [accounts])
+  }, [accountsData])
 
   if (netWorth.status === 'loading') return <SkeletonPanel breakpoint={breakpoint} />
 
@@ -443,7 +394,7 @@ export function AccountBalancePanel({ netWorth, accounts }: AccountBalancePanelP
       {/* Unavailable info banner */}
       {netWorth.status === 'unavailable' && <UnavailableBanner />}
 
-      {/* Account cards */}
+      {/* Account cards — rendered in all non-loading states when data is available */}
       {sortedAccounts.length > 0 && (
         <div style={cardsStyle}>
           {sortedAccounts.map((acc) => (

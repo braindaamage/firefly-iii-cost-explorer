@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
 import { ApiError } from '../api/client'
 import { Header } from '../components/layout/Header'
 import { PageHeader } from '../components/layout/PageHeader'
@@ -20,8 +19,6 @@ import { useGranularity } from '../hooks/useGranularity'
 import { transformToBreakdownRows } from '../lib/breakdown-transform'
 import { exportBreakdownCSV } from '../lib/csv-export'
 import { exportChartAsPNG } from '../lib/chart-export'
-import { fetchAssetAndLiabilityAccountBalances } from '../api/accounts'
-import { useNetWorth } from '../hooks/useNetWorth'
 import type { BreakdownRow } from '../types/breakdown'
 
 export function DashboardPage() {
@@ -38,15 +35,6 @@ export function DashboardPage() {
     removeOptionalFilter,
     availableOptionalFilters,
   } = useFilters()
-
-  const { data: accountBalances } = useQuery({
-    queryKey: ['accounts', 'asset,liability', config?.baseUrl],
-    queryFn: () => fetchAssetAndLiabilityAccountBalances(config!.baseUrl, config!.apiToken),
-    enabled: !!config,
-    staleTime: 60_000,
-  })
-
-  const netWorth = useNetWorth(config?.baseUrl ?? '', config?.apiToken ?? '')
 
   const { granularity, updateGranularity } = useGranularity()
   const dashboardData = useDashboardData(filters, granularity)
@@ -98,10 +86,9 @@ export function DashboardPage() {
           subtitle="Analyze your spending trends and budget variance."
         />
 
-        <AccountBalancePanel
-          netWorth={netWorth}
-          accounts={accountBalances ?? []}
-        />
+        {config && (
+          <AccountBalancePanel baseUrl={config.baseUrl} token={config.apiToken} />
+        )}
 
         {combinedError && !is401 && (
           <ErrorBanner

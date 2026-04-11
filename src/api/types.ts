@@ -47,14 +47,6 @@ export interface AccountRaw {
   }
 }
 
-export interface AssetAccountBalance {
-  id: string
-  name: string
-  balance: number
-  currencyCode: string
-  currencySymbol: string
-  currencyDecimalPlaces: number
-}
 
 export interface BudgetRaw {
   id: string

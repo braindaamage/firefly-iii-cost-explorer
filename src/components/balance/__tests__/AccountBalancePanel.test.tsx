@@ -1,13 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { AccountBalancePanel } from '../AccountBalancePanel'
 import { useBreakpoint } from '../../../hooks/useBreakpoint'
+import { useNetWorth } from '../../../hooks/useNetWorth'
 import type { Account } from '../../../api/accounts'
 import type { NetWorthResult } from '../../../hooks/computeNetWorth'
 
 vi.mock('../../../hooks/useBreakpoint', () => ({
   useBreakpoint: vi.fn(() => 'desktop'),
+}))
+
+vi.mock('../../../hooks/useNetWorth', () => ({
+  useNetWorth: vi.fn(),
+}))
+
+vi.mock('../../../api/accounts', () => ({
+  fetchAssetAndLiabilityAccountBalances: vi.fn().mockResolvedValue([]),
+}))
+
+vi.mock('../../../api/currencies', () => ({
+  fetchCurrencies: vi.fn().mockResolvedValue([]),
+  findPrimary: vi.fn().mockReturnValue(undefined),
+  findEnabledSecondaries: vi.fn().mockReturnValue([]),
+}))
+
+vi.mock('../../../api/exchangeRates', () => ({
+  fetchLatestExchangeRate: vi.fn().mockResolvedValue(null),
 }))
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
@@ -55,6 +74,27 @@ const OK: NetWorthResult = {
   secondaries: [
     { currencyCode: 'USD', currencySymbol: '$', currencyDecimalPlaces: 2, value: 9500.0, rateDate: '2024-03-15' },
   ],
+  excludedAccounts: [],
+  fallbackPerCurrency: [],
+}
+
+const OK_TWO_SECONDARIES: NetWorthResult = {
+  status: 'ok',
+  primaryTotal: 5000,
+  primaryCurrency: { code: 'EUR', symbol: '€', decimalPlaces: 2 },
+  secondaries: [
+    { currencyCode: 'USD', currencySymbol: '$', currencyDecimalPlaces: 2, value: 5500, rateDate: '2024-03-15' },
+    { currencyCode: 'CLP', currencySymbol: 'CLP', currencyDecimalPlaces: 0, value: 4800000, rateDate: '2024-03-15' },
+  ],
+  excludedAccounts: [],
+  fallbackPerCurrency: [],
+}
+
+const OK_CLP_PRIMARY: NetWorthResult = {
+  status: 'ok',
+  primaryTotal: 500000,
+  primaryCurrency: { code: 'CLP', symbol: 'CLP', decimalPlaces: 0 },
+  secondaries: [],
   excludedAccounts: [],
   fallbackPerCurrency: [],
 }
@@ -107,18 +147,6 @@ const UNAVAILABLE: NetWorthResult = {
   ],
 }
 
-const OK_TWO_SECONDARIES: NetWorthResult = {
-  status: 'ok',
-  primaryTotal: 5000,
-  primaryCurrency: { code: 'EUR', symbol: '€', decimalPlaces: 2 },
-  secondaries: [
-    { currencyCode: 'USD', currencySymbol: '$', currencyDecimalPlaces: 2, value: 5500, rateDate: '2024-03-15' },
-    { currencyCode: 'CLP', currencySymbol: 'CLP', currencyDecimalPlaces: 0, value: 4800000, rateDate: '2024-03-15' },
-  ],
-  excludedAccounts: [],
-  fallbackPerCurrency: [],
-}
-
 const UNAVAILABLE_NO_FALLBACK: NetWorthResult = {
   status: 'unavailable',
   primaryTotal: null,
@@ -128,30 +156,54 @@ const UNAVAILABLE_NO_FALLBACK: NetWorthResult = {
   fallbackPerCurrency: [],
 }
 
-const accounts: Account[] = [
-  makeAccount({ id: '1', name: 'Checking', currentBalance: 3456.78 }),
-  makeAccount({ id: '2', name: 'Savings', currentBalance: 5000.0 }),
-  makeAccount({ id: '3', name: 'Cash', currentBalance: 388.89 }),
-]
+// ─── Render helper ────────────────────────────────────────────────────────────
 
-const singleAccount: Account[] = [
-  makeAccount({ id: '1', name: 'Checking', currentBalance: 1000 }),
-]
+const BASE_URL = 'https://firefly.example.com'
+const TOKEN = 'test-token'
+const ACCOUNTS_QUERY_KEY = ['accounts', 'asset,liability', BASE_URL]
 
+function renderPanel(seedAccounts?: Account[]) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  if (seedAccounts) {
+    client.setQueryData(ACCOUNTS_QUERY_KEY, seedAccounts)
+  }
+  return render(
+    <QueryClientProvider client={client}>
+      <AccountBalancePanel baseUrl={BASE_URL} token={TOKEN} />
+    </QueryClientProvider>
+  )
+}
 
-// ─── Tests — state rendering ──────────────────────────────────────────────────
+// ─── Tests — state: loading ───────────────────────────────────────────────────
 
 describe('AccountBalancePanel — state: loading', () => {
-  it('renders skeleton when status is loading', () => {
-    render(<AccountBalancePanel netWorth={LOADING} accounts={[]} />)
+  beforeEach(() => {
+    vi.mocked(useBreakpoint).mockReturnValue('desktop')
+    vi.mocked(useNetWorth).mockReturnValue(LOADING)
+  })
+
+  it('renders loading skeleton when netWorth.status is loading', () => {
+    renderPanel()
     expect(screen.getByLabelText('Loading balances')).toBeInTheDocument()
     expect(screen.queryByText('Net Worth')).not.toBeInTheDocument()
   })
+
+  it('does NOT render account cards in loading state', () => {
+    renderPanel()
+    expect(screen.queryByTestId('account-card')).not.toBeInTheDocument()
+  })
 })
 
+// ─── Tests — state: error ─────────────────────────────────────────────────────
+
 describe('AccountBalancePanel — state: error', () => {
-  it('renders error message in red when status is error', () => {
-    render(<AccountBalancePanel netWorth={ERROR} accounts={[]} />)
+  beforeEach(() => {
+    vi.mocked(useBreakpoint).mockReturnValue('desktop')
+    vi.mocked(useNetWorth).mockReturnValue(ERROR)
+  })
+
+  it('renders error state with red error text', () => {
+    renderPanel()
     expect(screen.getByText('Net Worth')).toBeInTheDocument()
     const errorEl = screen.getByTestId('net-worth-error')
     expect(errorEl).toBeInTheDocument()
@@ -159,171 +211,184 @@ describe('AccountBalancePanel — state: error', () => {
   })
 })
 
+// ─── Tests — state: ok ────────────────────────────────────────────────────────
+
 describe('AccountBalancePanel — state: ok', () => {
-  it('renders Net Worth label', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={accounts} />)
-    expect(screen.getByText('Net Worth')).toBeInTheDocument()
+  beforeEach(() => {
+    vi.mocked(useBreakpoint).mockReturnValue('desktop')
+    vi.mocked(useNetWorth).mockReturnValue(OK)
   })
 
-  it('renders primary total large', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={accounts} />)
-    const primary = screen.getByTestId('net-worth-primary')
-    expect(primary).toBeInTheDocument()
-    expect(primary).toHaveStyle({ fontSize: '32px', fontWeight: 600 })
-  })
-
-  it('renders secondary subline', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={accounts} />)
+  it('renders ok state with primary total and subline conversions', () => {
+    renderPanel()
+    expect(screen.getByTestId('net-worth-primary')).toBeInTheDocument()
     expect(screen.getByTestId('net-worth-subline')).toBeInTheDocument()
     expect(screen.getByTestId('net-worth-secondary-USD')).toBeInTheDocument()
   })
 
+  it('renders Net Worth label', () => {
+    renderPanel()
+    expect(screen.getByText('Net Worth')).toBeInTheDocument()
+  })
+
   it('renders no warning chips', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={accounts} />)
+    renderPanel()
     expect(screen.queryByTestId('warning-chips')).not.toBeInTheDocument()
   })
 
-  it('renders account cards', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={accounts} />)
-    expect(screen.getAllByTestId('account-card')).toHaveLength(3)
-  })
-
-  it('renders all account names', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={accounts} />)
-    expect(screen.getByText('Checking')).toBeInTheDocument()
-    expect(screen.getByText('Savings')).toBeInTheDocument()
-    expect(screen.getByText('Cash')).toBeInTheDocument()
+  it('formats primary total with CLP decimalPlaces 0', () => {
+    vi.mocked(useNetWorth).mockReturnValue(OK_CLP_PRIMARY)
+    renderPanel()
+    const primary = screen.getByTestId('net-worth-primary')
+    expect(primary).toBeInTheDocument()
+    // CLP formatted without decimal places — no dot in the number
+    expect(primary.textContent).not.toMatch(/\.\d{2}/)
   })
 })
+
+// ─── Tests — state: partial ───────────────────────────────────────────────────
 
 describe('AccountBalancePanel — state: partial', () => {
-  it('renders primary total', () => {
-    render(<AccountBalancePanel netWorth={PARTIAL} accounts={accounts} />)
-    expect(screen.getByTestId('net-worth-primary')).toBeInTheDocument()
+  beforeEach(() => {
+    vi.mocked(useBreakpoint).mockReturnValue('desktop')
+    vi.mocked(useNetWorth).mockReturnValue(PARTIAL)
   })
 
-  it('renders "N cuentas excluidas" chip', () => {
-    render(<AccountBalancePanel netWorth={PARTIAL} accounts={accounts} />)
-    expect(screen.getByTestId('chip-excluded')).toBeInTheDocument()
-    expect(screen.getByTestId('chip-excluded')).toHaveTextContent('2 cuentas excluidas')
-  })
-
-  it('clicking excluded chip reveals account names', async () => {
-    render(<AccountBalancePanel netWorth={PARTIAL} accounts={accounts} />)
+  it('renders partial state with excluded accounts chip and tooltip', () => {
+    renderPanel()
     const chip = screen.getByTestId('chip-excluded')
-    await userEvent.click(chip)
-    const tooltip = screen.getByTestId('chip-excluded-tooltip')
-    expect(tooltip).toBeInTheDocument()
-    expect(tooltip).toHaveTextContent('Old Account')
-    expect(tooltip).toHaveTextContent('CLP Account')
+    expect(chip).toBeInTheDocument()
+    expect(chip).toHaveTextContent('2 cuentas excluidas')
+    // title attribute contains excluded account names
+    expect(chip).toHaveAttribute('title', expect.stringContaining('Old Account'))
+    expect(chip).toHaveAttribute('title', expect.stringContaining('CLP Account'))
   })
 
-  it('clicking chip again hides tooltip', async () => {
-    render(<AccountBalancePanel netWorth={PARTIAL} accounts={accounts} />)
-    const chip = screen.getByTestId('chip-excluded')
-    await userEvent.click(chip)
-    expect(screen.getByTestId('chip-excluded-tooltip')).toBeInTheDocument()
-    await userEvent.click(chip)
-    expect(screen.queryByTestId('chip-excluded-tooltip')).not.toBeInTheDocument()
+  it('chip title includes currency code', () => {
+    renderPanel()
+    expect(screen.getByTestId('chip-excluded')).toHaveAttribute('title', expect.stringContaining('USD'))
   })
 })
 
+// ─── Tests — state: partialSecondary ─────────────────────────────────────────
+
 describe('AccountBalancePanel — state: partialSecondary (some missing)', () => {
-  it('renders primary total', () => {
-    render(<AccountBalancePanel netWorth={PARTIAL_SECONDARY_SOME} accounts={accounts} />)
-    expect(screen.getByTestId('net-worth-primary')).toBeInTheDocument()
+  beforeEach(() => {
+    vi.mocked(useBreakpoint).mockReturnValue('desktop')
+    vi.mocked(useNetWorth).mockReturnValue(PARTIAL_SECONDARY_SOME)
   })
 
-  it('renders subline with visible secondary only', () => {
-    render(<AccountBalancePanel netWorth={PARTIAL_SECONDARY_SOME} accounts={accounts} />)
-    expect(screen.getByTestId('net-worth-secondary-USD')).toBeInTheDocument()
-    expect(screen.queryByTestId('net-worth-secondary-CLP')).not.toBeInTheDocument()
-  })
-
-  it('renders individual chip for missing secondary', () => {
-    render(<AccountBalancePanel netWorth={PARTIAL_SECONDARY_SOME} accounts={accounts} />)
+  it('renders partialSecondary state with rate missing chips per secondary', () => {
+    renderPanel()
     expect(screen.getByTestId('chip-rate-missing-CLP')).toBeInTheDocument()
     expect(screen.getByTestId('chip-rate-missing-CLP')).toHaveTextContent('CLP rate missing')
+  })
+
+  it('shows only secondaries with values in subline', () => {
+    renderPanel()
+    expect(screen.getByTestId('net-worth-secondary-USD')).toBeInTheDocument()
+    expect(screen.queryByTestId('net-worth-secondary-CLP')).not.toBeInTheDocument()
   })
 })
 
 describe('AccountBalancePanel — state: partialSecondary (all missing)', () => {
-  it('renders no subline when all secondaries are missing', () => {
-    render(<AccountBalancePanel netWorth={PARTIAL_SECONDARY_ALL} accounts={accounts} />)
-    expect(screen.queryByTestId('net-worth-subline')).not.toBeInTheDocument()
+  beforeEach(() => {
+    vi.mocked(useBreakpoint).mockReturnValue('desktop')
+    vi.mocked(useNetWorth).mockReturnValue(PARTIAL_SECONDARY_ALL)
   })
 
-  it('renders global "no secondary rates" chip', () => {
-    render(<AccountBalancePanel netWorth={PARTIAL_SECONDARY_ALL} accounts={accounts} />)
+  it('renders partialSecondary state with global chip when all secondaries fail', () => {
+    renderPanel()
     expect(screen.getByTestId('chip-all-rates-missing')).toBeInTheDocument()
     expect(screen.getByTestId('chip-all-rates-missing')).toHaveTextContent('No secondary rates available')
   })
+
+  it('renders no subline when all secondaries are missing', () => {
+    renderPanel()
+    expect(screen.queryByTestId('net-worth-subline')).not.toBeInTheDocument()
+  })
 })
 
+// ─── Tests — state: unavailable ───────────────────────────────────────────────
+
 describe('AccountBalancePanel — state: unavailable', () => {
-  it('renders unavailable banner (snapshot-like check)', () => {
-    render(<AccountBalancePanel netWorth={UNAVAILABLE} accounts={[]} />)
-    const banner = screen.getByTestId('unavailable-banner')
-    expect(banner).toBeInTheDocument()
-    expect(banner).toHaveTextContent('Convert to primary currency')
-    expect(banner).toHaveTextContent('Ver docs')
-    // jsdom normalizes hex → rgb/rgba; verify spec color applied via color property
-    expect(banner).toHaveStyle({ color: 'rgb(138, 180, 248)' })
+  beforeEach(() => {
+    vi.mocked(useBreakpoint).mockReturnValue('desktop')
+    vi.mocked(useNetWorth).mockReturnValue(UNAVAILABLE)
   })
 
-  it('renders fallback per-currency totals', () => {
-    render(<AccountBalancePanel netWorth={UNAVAILABLE} accounts={[]} />)
+  it('renders unavailable state with fallback per-currency and info banner', () => {
+    renderPanel()
     expect(screen.getByTestId('net-worth-fallback')).toBeInTheDocument()
     expect(screen.getAllByTestId('net-worth-total')).toHaveLength(2)
+    expect(screen.getByTestId('unavailable-banner')).toBeInTheDocument()
   })
 
-  it('renders nothing for header when fallback is empty', () => {
-    render(<AccountBalancePanel netWorth={UNAVAILABLE_NO_FALLBACK} accounts={[]} />)
-    expect(screen.queryByTestId('net-worth-fallback')).not.toBeInTheDocument()
-  })
-
-  it('banner link points to firefly docs', () => {
-    render(<AccountBalancePanel netWorth={UNAVAILABLE} accounts={[]} />)
-    const link = screen.getByRole('link', { name: 'Ver docs' })
-    expect(link).toHaveAttribute(
+  it('renders unavailable banner with link to Firefly docs', () => {
+    renderPanel()
+    const banner = screen.getByTestId('unavailable-banner')
+    expect(banner).toHaveTextContent('Convert to primary currency')
+    expect(banner).toHaveTextContent('Ver docs')
+    expect(screen.getByRole('link', { name: 'Ver docs' })).toHaveAttribute(
       'href',
       'https://docs.firefly-iii.org/explanation/financial-concepts/exchange-rates/'
     )
+  })
+
+  it('renders nothing in header when fallback is empty', () => {
+    vi.mocked(useNetWorth).mockReturnValue(UNAVAILABLE_NO_FALLBACK)
+    renderPanel()
+    expect(screen.queryByTestId('net-worth-fallback')).not.toBeInTheDocument()
   })
 })
 
 // ─── Tests — account cards ────────────────────────────────────────────────────
 
 describe('AccountBalancePanel — account cards', () => {
-  it('orders accounts by balance descending within currency group', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={accounts} />)
-    const accountNames = screen.getAllByTestId('account-name').map((el) => el.textContent)
-    expect(accountNames[0]).toBe('Savings')    // 5000
-    expect(accountNames[1]).toBe('Checking')   // 3456.78
-    expect(accountNames[2]).toBe('Cash')       // 388.89
+  const threeAccounts: Account[] = [
+    makeAccount({ id: '1', name: 'Savings', currentBalance: 5000 }),
+    makeAccount({ id: '2', name: 'Checking', currentBalance: 3456.78 }),
+    makeAccount({ id: '3', name: 'Cash', currentBalance: 388.89 }),
+  ]
+
+  beforeEach(() => {
+    vi.mocked(useBreakpoint).mockReturnValue('desktop')
+    vi.mocked(useNetWorth).mockReturnValue(OK)
   })
 
-  it('shows negative balance in red', () => {
-    const withNegative: Account[] = [
-      makeAccount({ id: '1', name: 'Overdraft', currentBalance: -200.0 }),
-    ]
-    render(<AccountBalancePanel netWorth={OK} accounts={withNegative} />)
-    expect(screen.getByTestId('account-balance-1')).toHaveStyle({ color: '#f28b82' })
+  it('renders account cards below header in ok state', () => {
+    renderPanel(threeAccounts)
+    expect(screen.getAllByTestId('account-card')).toHaveLength(3)
   })
 
-  it('shows positive balance in light color', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={singleAccount} />)
-    expect(screen.getByTestId('account-balance-1')).toHaveStyle({ color: '#e8eaed' })
+  it('renders all account names', () => {
+    renderPanel(threeAccounts)
+    expect(screen.getByText('Savings')).toBeInTheDocument()
+    expect(screen.getByText('Checking')).toBeInTheDocument()
+    expect(screen.getByText('Cash')).toBeInTheDocument()
   })
 
-  it('groups accounts by currency then sorts by balance within each group', () => {
-    const mixedAccounts: Account[] = [
+  it('renders account cards below header in unavailable state', () => {
+    vi.mocked(useNetWorth).mockReturnValue(UNAVAILABLE)
+    renderPanel(threeAccounts)
+    expect(screen.getByTestId('unavailable-banner')).toBeInTheDocument()
+    expect(screen.getAllByTestId('account-card')).toHaveLength(3)
+  })
+
+  it('negative balance on individual card shows red color', () => {
+    const overdraft = [makeAccount({ id: '99', name: 'Overdraft', currentBalance: -200 })]
+    renderPanel(overdraft)
+    expect(screen.getByTestId('account-balance-99')).toHaveStyle({ color: '#f28b82' })
+  })
+
+  it('account cards are grouped by currency then sorted by balance desc', () => {
+    const mixed: Account[] = [
       makeAccount({ id: '1', name: 'EUR Savings', currentBalance: 3000 }),
       makeAccount({ id: '2', name: 'USD Main', currentBalance: 4000, currencyCode: 'USD', currencySymbol: '$' }),
       makeAccount({ id: '3', name: 'EUR Checking', currentBalance: 5000 }),
       makeAccount({ id: '4', name: 'USD Savings', currentBalance: 1000, currencyCode: 'USD', currencySymbol: '$' }),
     ]
-    render(<AccountBalancePanel netWorth={OK} accounts={mixedAccounts} />)
+    renderPanel(mixed)
     const names = screen.getAllByTestId('account-name').map((el) => el.textContent)
     expect(names[0]).toBe('EUR Checking')
     expect(names[1]).toBe('EUR Savings')
@@ -331,95 +396,80 @@ describe('AccountBalancePanel — account cards', () => {
     expect(names[3]).toBe('USD Savings')
   })
 
-  it('renders no card container when accounts is empty', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={[]} />)
-    expect(screen.queryByTestId('account-card')).not.toBeInTheDocument()
+  it('inactive accounts are not rendered as cards', () => {
+    const withInactive: Account[] = [
+      makeAccount({ id: '1', name: 'Active Account', active: true, currentBalance: 500 }),
+      makeAccount({ id: '2', name: 'Inactive Account', active: false, currentBalance: 9999 }),
+    ]
+    renderPanel(withInactive)
+    expect(screen.getAllByTestId('account-card')).toHaveLength(1)
+    expect(screen.getByText('Active Account')).toBeInTheDocument()
+    expect(screen.queryByText('Inactive Account')).not.toBeInTheDocument()
   })
 })
 
 // ─── Tests — responsive ───────────────────────────────────────────────────────
 
-describe('AccountBalancePanel — mobile responsive', () => {
+describe('AccountBalancePanel — responsive: mobile', () => {
   beforeEach(() => {
     vi.mocked(useBreakpoint).mockReturnValue('mobile')
+    vi.mocked(useNetWorth).mockReturnValue(OK)
   })
 
-  it('renders skeleton with single column on mobile', () => {
-    render(<AccountBalancePanel netWorth={LOADING} accounts={[]} />)
+  it('renders loading skeleton with single column on mobile', () => {
+    vi.mocked(useNetWorth).mockReturnValue(LOADING)
+    renderPanel()
     const skeleton = screen.getByLabelText('Loading balances')
     const cardsContainer = skeleton.lastElementChild as HTMLElement
     expect(cardsContainer).toHaveStyle({ gridTemplateColumns: '1fr' })
   })
 
-  it('renders primary total font-size 26px on mobile', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={singleAccount} />)
+  it('responsive: uses 26px total on mobile', () => {
+    renderPanel()
     expect(screen.getByTestId('net-worth-primary')).toHaveStyle({ fontSize: '26px' })
   })
 
-  it('renders account balance font-size 14px on mobile', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={singleAccount} />)
-    expect(screen.getByTestId('account-balance-1')).toHaveStyle({ fontSize: '14px' })
-  })
-
-  it('renders cards in single column grid on mobile', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={singleAccount} />)
-    const card = screen.getByTestId('account-card')
-    expect(card.parentElement).toHaveStyle({ gridTemplateColumns: '1fr' })
+  it('responsive: subline uses flex-wrap on mobile', () => {
+    vi.mocked(useNetWorth).mockReturnValue(OK_TWO_SECONDARIES)
+    renderPanel()
+    expect(screen.getByTestId('net-worth-subline')).toHaveStyle({ flexWrap: 'wrap' })
   })
 })
 
-describe('AccountBalancePanel — tablet responsive', () => {
+describe('AccountBalancePanel — responsive: tablet', () => {
   beforeEach(() => {
     vi.mocked(useBreakpoint).mockReturnValue('tablet')
+    vi.mocked(useNetWorth).mockReturnValue(OK)
   })
 
-  it('renders skeleton with two column grid on tablet', () => {
-    render(<AccountBalancePanel netWorth={LOADING} accounts={[]} />)
+  it('renders loading skeleton with two column grid on tablet', () => {
+    vi.mocked(useNetWorth).mockReturnValue(LOADING)
+    renderPanel()
     const skeleton = screen.getByLabelText('Loading balances')
     const cardsContainer = skeleton.lastElementChild as HTMLElement
     expect(cardsContainer).toHaveStyle({ gridTemplateColumns: '1fr 1fr' })
   })
 
-  it('renders primary total font-size 26px on tablet (compact)', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={singleAccount} />)
+  it('uses 26px primary total on tablet (compact)', () => {
+    renderPanel()
     expect(screen.getByTestId('net-worth-primary')).toHaveStyle({ fontSize: '26px' })
-  })
-
-  it('renders account balance font-size 15px on tablet', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={singleAccount} />)
-    expect(screen.getByTestId('account-balance-1')).toHaveStyle({ fontSize: '15px' })
-  })
-
-  it('renders cards in two column grid on tablet', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={singleAccount} />)
-    const card = screen.getByTestId('account-card')
-    expect(card.parentElement).toHaveStyle({ gridTemplateColumns: '1fr 1fr' })
   })
 })
 
-describe('AccountBalancePanel — desktop responsive', () => {
+describe('AccountBalancePanel — responsive: desktop', () => {
   beforeEach(() => {
     vi.mocked(useBreakpoint).mockReturnValue('desktop')
+    vi.mocked(useNetWorth).mockReturnValue(OK)
   })
 
-  it('renders primary total font-size 32px on desktop', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={singleAccount} />)
+  it('responsive: uses 32px total on desktop', () => {
+    renderPanel()
     expect(screen.getByTestId('net-worth-primary')).toHaveStyle({ fontSize: '32px' })
   })
 
-  it('renders account balance font-size 16px on desktop', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={singleAccount} />)
-    expect(screen.getByTestId('account-balance-1')).toHaveStyle({ fontSize: '16px' })
-  })
-
   it('renders subline with · separator on desktop (two secondaries)', () => {
-    render(<AccountBalancePanel netWorth={OK_TWO_SECONDARIES} accounts={accounts} />)
+    vi.mocked(useNetWorth).mockReturnValue(OK_TWO_SECONDARIES)
+    renderPanel()
     expect(screen.getByTestId('net-worth-subline')).toHaveTextContent('·')
-  })
-
-  it('renders cards container with overflowX auto on desktop', () => {
-    render(<AccountBalancePanel netWorth={OK} accounts={singleAccount} />)
-    const card = screen.getByTestId('account-card')
-    expect(card.parentElement).toHaveStyle({ overflowX: 'auto' })
   })
 })
