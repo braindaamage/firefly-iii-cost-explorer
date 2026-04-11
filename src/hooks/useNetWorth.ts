@@ -45,7 +45,6 @@ export function useNetWorth(baseUrl: string, token: string): NetWorthResult {
         accountsStatus: accountsQuery.status,
         currenciesStatus: currenciesQuery.status,
         accounts: accountsQuery.data ?? [],
-        currencies,
         primary,
         secondaries,
         // Fix 1: map to RateQueryState shape (data nested, no from/to)

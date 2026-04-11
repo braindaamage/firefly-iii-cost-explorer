@@ -33,7 +33,6 @@ export interface RateQueryState {
 
 export interface ComputeNetWorthInputs {
   accounts: Account[]
-  currencies: Currency[]
   primary: Currency | undefined
   secondaries: Currency[]
   rateQueries: RateQueryState[]
@@ -120,7 +119,7 @@ export function computeNetWorth(inputs: ComputeNetWorthInputs): NetWorthResult {
   // is treated as having pcCurrentBalance = 0 (not excluded, contributes 0 to total)
   const normalized = activeAccounts.map((acc) => {
     if (acc.pcCurrentBalance === null && acc.currentBalance === 0) {
-      return { ...acc, pcCurrentBalance: 0 as number }
+      return { ...acc, pcCurrentBalance: 0 }
     }
     return acc
   })

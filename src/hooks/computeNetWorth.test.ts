@@ -48,7 +48,6 @@ function makeRateQuery(overrides: Partial<RateQueryState> = {}): RateQueryState 
 function baseInputs(overrides: Partial<ComputeNetWorthInputs> = {}): ComputeNetWorthInputs {
   return {
     accounts: [makeAccount()],
-    currencies: [EUR],
     primary: EUR,
     secondaries: [],
     rateQueries: [],
@@ -262,7 +261,6 @@ describe('computeNetWorth', () => {
     const result = computeNetWorth(baseInputs({
       accounts,
       primary: clpPrimary,
-      currencies: [clpPrimary],
     }))
 
     expect(result.status).toBe('ok')
@@ -287,7 +285,7 @@ describe('computeNetWorth', () => {
   })
 
   // Fix 6: primary === undefined with active accounts → unavailable with populated fallback (spec §8.2)
-  it('returns unavailable with populated fallback when primary is undefined', () => {
+  it('computeNetWorth_primaryUndefined_returnsUnavailableWithPopulatedFallback', () => {
     const accounts = [
       makeAccount({ id: '1', name: 'Savings EUR', currencyCode: 'EUR', currencySymbol: '€', currentBalance: 100, pcCurrentBalance: null }),
       makeAccount({ id: '2', name: 'Savings USD', currencyCode: 'USD', currencySymbol: '$', currentBalance: 200, pcCurrentBalance: null }),
@@ -296,7 +294,6 @@ describe('computeNetWorth', () => {
     const result = computeNetWorth(baseInputs({
       accounts,
       primary: undefined,
-      currencies: [],
     }))
 
     expect(result.status).toBe('unavailable')
