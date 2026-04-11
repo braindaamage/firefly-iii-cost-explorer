@@ -146,7 +146,10 @@ const UNAVAILABLE: NetWorthResult = {
     { currencyCode: 'EUR', symbol: '€', decimalPlaces: 2, total: 1000 },
     { currencyCode: 'USD', symbol: '$', decimalPlaces: 2, total: 500 },
   ],
-  netByCurrency: [],
+  netByCurrency: [
+    { currencyCode: 'EUR', symbol: '€', decimalPlaces: 2, total: 1000 },
+    { currencyCode: 'USD', symbol: '$', decimalPlaces: 2, total: 500 },
+  ],
 }
 
 const UNAVAILABLE_CLP: NetWorthResult = {
@@ -158,7 +161,9 @@ const UNAVAILABLE_CLP: NetWorthResult = {
   fallbackPerCurrency: [
     { currencyCode: 'CLP', symbol: 'CLP', decimalPlaces: 0, total: 6609492 },
   ],
-  netByCurrency: [],
+  netByCurrency: [
+    { currencyCode: 'CLP', symbol: 'CLP', decimalPlaces: 0, total: 6609492 },
+  ],
 }
 
 const UNAVAILABLE_NO_FALLBACK: NetWorthResult = {
