@@ -93,12 +93,26 @@ export function createFireflyClient(baseUrl, pat) {
       }
     },
 
-    /** PUT /preferences/{key} with { name, data }. */
+    /**
+     * Upsert a preference: PUT first; if 404 (preference doesn't exist yet),
+     * fall back to POST. Mirrors Firefly III 6.5.9 behaviour verified empirically.
+     */
     async putPreference(key, value) {
-      await request(`/preferences/${encodeURIComponent(key)}`, {
-        method: 'PUT',
-        body: JSON.stringify({ name: key, data: value }),
-      })
+      try {
+        await request(`/preferences/${encodeURIComponent(key)}`, {
+          method: 'PUT',
+          body: JSON.stringify({ name: key, data: value }),
+        })
+      } catch (err) {
+        if (err.status === 404) {
+          await request('/preferences', {
+            method: 'POST',
+            body: JSON.stringify({ name: key, data: value }),
+          })
+        } else {
+          throw err
+        }
+      }
     },
 
     /**
@@ -117,18 +131,28 @@ export function createFireflyClient(baseUrl, pat) {
 
     /**
      * Writes last-run status to a separate read-only preference consumed by the SPA.
-     * Errors are swallowed (non-critical).
+     * Uses PUT→POST fallback (same as putPreference). Errors are swallowed (non-critical).
      */
     async writeLastRun(lastRun) {
       const key = 'costExplorer.ratesSidecar.lastRun'
       try {
-        await request(`/preferences/${encodeURIComponent(key)}`, {
-          method: 'PUT',
-          body: JSON.stringify({ name: key, data: lastRun }),
-        })
-      } catch (err) {
+        try {
+          await request(`/preferences/${encodeURIComponent(key)}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name: key, data: lastRun }),
+          })
+        } catch (err) {
+          if (err.status === 404) {
+            await request('/preferences', {
+              method: 'POST',
+              body: JSON.stringify({ name: key, data: lastRun }),
+            })
+          } else {
+            throw err
+          }
+        }
+      } catch {
         // Non-critical — swallow silently (caller logs if needed)
-        void err
       }
     },
   }

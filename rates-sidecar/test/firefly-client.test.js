@@ -79,6 +79,42 @@ describe('createFireflyClient', () => {
     })
   })
 
+  describe('putPreference', () => {
+    it('PUTs successfully when preference exists', async () => {
+      fetch.mockResolvedValue(makeOkResponse({ data: {} }, 200))
+      const client = createFireflyClient(BASE_URL, PAT)
+
+      await client.putPreference('costExplorer.ratesSidecar', { enabled: true })
+
+      expect(fetch).toHaveBeenCalledWith(
+        `${BASE_URL}/api/v1/preferences/costExplorer.ratesSidecar`,
+        expect.objectContaining({ method: 'PUT' })
+      )
+    })
+
+    it('falls back to POST when PUT returns 404 (preference does not exist yet)', async () => {
+      fetch
+        .mockResolvedValueOnce(makeErrorResponse(404))  // PUT → 404
+        .mockResolvedValueOnce(makeOkResponse({ data: {} }, 201))  // POST → 201
+
+      const client = createFireflyClient(BASE_URL, PAT)
+      await client.putPreference('costExplorer.ratesSidecar', { enabled: true })
+
+      expect(fetch).toHaveBeenCalledTimes(2)
+      const [, postCall] = fetch.mock.calls
+      expect(postCall[0]).toBe(`${BASE_URL}/api/v1/preferences`)
+      expect(postCall[1].method).toBe('POST')
+      expect(JSON.parse(postCall[1].body)).toEqual({ name: 'costExplorer.ratesSidecar', data: { enabled: true } })
+    })
+
+    it('rethrows non-404 errors from PUT', async () => {
+      fetch.mockResolvedValue(makeErrorResponse(500, 'Server Error'))
+      const client = createFireflyClient(BASE_URL, PAT)
+
+      await expect(client.putPreference('any-key', {})).rejects.toThrow('500')
+    })
+  })
+
   describe('postExchangeRates', () => {
     it('sends correct payload shape: { from, rates }', async () => {
       fetch.mockResolvedValue(makeOkResponse(null, 204))
