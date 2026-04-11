@@ -26,7 +26,6 @@ export interface NetWorthResult {
   fallbackPerCurrency: { currencyCode: string; symbol: string; total: number }[]
 }
 
-// Fix 1: RateQueryState replaces the old RateResult — data is nested, no from/to needed
 export interface RateQueryState {
   status: 'pending' | 'success' | 'error'
   data: { rate: number; date: string } | null
