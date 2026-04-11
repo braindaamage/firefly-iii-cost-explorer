@@ -45,7 +45,7 @@ describe('createFireflyClient', () => {
 
       expect(codes).toEqual(['EUR', 'USD', 'CLP'])
       expect(fetch).toHaveBeenCalledWith(
-        `${BASE_URL}/api/v1/currencies?active=true`,
+        `${BASE_URL}/api/v1/currencies?active=true&limit=200`,
         expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${PAT}` }) })
       )
     })
@@ -76,6 +76,28 @@ describe('createFireflyClient', () => {
 
       const client = createFireflyClient(BASE_URL, PAT)
       await expect(client.getPreference('any-key')).rejects.toThrow('500')
+    })
+
+    it('aborts request after FIREFLY_TIMEOUT_MS when fetch never resolves', async () => {
+      vi.useFakeTimers()
+      // Mock fetch that listens to the abort signal and rejects when aborted
+      fetch.mockImplementation((_url, options) => {
+        return new Promise((_, reject) => {
+          options?.signal?.addEventListener('abort', () => {
+            const err = new Error('The operation was aborted.')
+            err.name = 'AbortError'
+            reject(err)
+          })
+        })
+      })
+
+      const client = createFireflyClient(BASE_URL, PAT)
+      // Attach rejection handler BEFORE advancing timers to avoid unhandled-rejection window
+      const assertion = expect(client.getCurrencies()).rejects.toThrow()
+      await vi.advanceTimersByTimeAsync(31_000)
+      await assertion
+
+      vi.useRealTimers()
     })
   })
 
@@ -172,6 +194,40 @@ describe('createFireflyClient', () => {
 
       expect(fetch).toHaveBeenCalledTimes(3)
       vi.useRealTimers()
+    })
+  })
+
+  describe('writeLastRun', () => {
+    it('PUT 200: writes silently without fallback', async () => {
+      fetch.mockResolvedValue(makeOkResponse({}, 200))
+      const client = createFireflyClient(BASE_URL, PAT)
+
+      await client.writeLastRun({ timestamp: '2026-04-11T00:00:00Z', status: 'success' })
+
+      expect(fetch).toHaveBeenCalledTimes(1)
+      expect(fetch.mock.calls[0][1].method).toBe('PUT')
+    })
+
+    it('PUT 404 → POST fallback', async () => {
+      fetch
+        .mockResolvedValueOnce(makeErrorResponse(404))           // PUT → 404
+        .mockResolvedValueOnce(makeOkResponse({}, 201))          // POST → 201
+
+      const client = createFireflyClient(BASE_URL, PAT)
+      await client.writeLastRun({ timestamp: '2026-04-11T00:00:00Z', status: 'success' })
+
+      expect(fetch).toHaveBeenCalledTimes(2)
+      expect(fetch.mock.calls[0][1].method).toBe('PUT')
+      expect(fetch.mock.calls[1][1].method).toBe('POST')
+    })
+
+    it('PUT 500: error swallowed (non-critical)', async () => {
+      fetch.mockResolvedValue(makeErrorResponse(500, 'Server Error'))
+      const client = createFireflyClient(BASE_URL, PAT)
+
+      await expect(
+        client.writeLastRun({ timestamp: '2026-04-11T00:00:00Z', status: 'success' })
+      ).resolves.toBeUndefined()
     })
   })
 })

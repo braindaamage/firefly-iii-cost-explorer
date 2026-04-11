@@ -19,6 +19,9 @@
  * @property {(lastRun: object) => Promise<void>} writeLastRun
  */
 
+// Timeout for all Firefly API requests
+const FIREFLY_TIMEOUT_MS = 30_000
+
 /**
  * @param {string} baseUrl  e.g. "http://firefly-iii:8080"
  * @param {string} pat      Personal Access Token (never logged)
@@ -28,30 +31,37 @@ export function createFireflyClient(baseUrl, pat) {
   const authHeader = `Bearer ${pat}`
 
   /**
-   * Raw fetch wrapper. Throws on non-2xx, with status attached.
+   * Raw fetch wrapper with timeout. Throws on non-2xx, with status attached.
    * The Authorization header value is NEVER interpolated into error messages.
    */
   async function request(path, options = {}) {
     const url = `${baseUrl}/api/v1${path}`
-    const res = await fetch(url, {
-      ...options,
-      headers: {
-        Authorization: authHeader,
-        Accept: 'application/json',
-        'Content-Type': 'application/json',
-        ...(options.headers ?? {}),
-      },
-    })
-    if (!res.ok) {
-      const body = await res.text().catch(() => '')
-      const err = new Error(`Firefly API ${res.status} on ${path}`)
-      err.status = res.status
-      // Redact PAT from body in case Firefly echoes request headers
-      err.body = body.replace(pat, '[REDACTED]')
-      throw err
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), FIREFLY_TIMEOUT_MS)
+    try {
+      const res = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+        headers: {
+          Authorization: authHeader,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          ...(options.headers ?? {}),
+        },
+      })
+      if (!res.ok) {
+        const body = await res.text().catch(() => '')
+        const err = new Error(`Firefly API ${res.status} on ${path}`)
+        err.status = res.status
+        // Redact all occurrences of PAT from body in case Firefly echoes request headers
+        err.body = body.replaceAll(pat, '[REDACTED]')
+        throw err
+      }
+      const text = await res.text()
+      return text ? JSON.parse(text) : null
+    } finally {
+      clearTimeout(timer)
     }
-    const text = await res.text()
-    return text ? JSON.parse(text) : null
   }
 
   /**
@@ -75,10 +85,36 @@ export function createFireflyClient(baseUrl, pat) {
     throw lastErr
   }
 
+  /**
+   * Internal: upsert a preference (PUT first; POST on 404).
+   * Mirrors Firefly III 6.5.9 behaviour verified empirically.
+   */
+  async function upsertPreference(key, value) {
+    try {
+      await request(`/preferences/${encodeURIComponent(key)}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: key, data: value }),
+      })
+    } catch (err) {
+      if (err.status === 404) {
+        await request('/preferences', {
+          method: 'POST',
+          body: JSON.stringify({ name: key, data: value }),
+        })
+      } else {
+        throw err
+      }
+    }
+  }
+
   return {
-    /** Returns array of active currency codes, base currencies first. */
+    /**
+     * Returns array of active currency codes.
+     * limit=200 covers practical cases; users with >200 active currencies should
+     * use currencyMode='explicit'. See README "Known limitations".
+     */
     async getCurrencies() {
-      const data = await request('/currencies?active=true')
+      const data = await request('/currencies?active=true&limit=200')
       return (data?.data ?? []).map((c) => c.attributes?.code).filter(Boolean)
     },
 
@@ -93,26 +129,9 @@ export function createFireflyClient(baseUrl, pat) {
       }
     },
 
-    /**
-     * Upsert a preference: PUT first; if 404 (preference doesn't exist yet),
-     * fall back to POST. Mirrors Firefly III 6.5.9 behaviour verified empirically.
-     */
+    /** Upsert a preference. Delegates to internal upsertPreference. */
     async putPreference(key, value) {
-      try {
-        await request(`/preferences/${encodeURIComponent(key)}`, {
-          method: 'PUT',
-          body: JSON.stringify({ name: key, data: value }),
-        })
-      } catch (err) {
-        if (err.status === 404) {
-          await request('/preferences', {
-            method: 'POST',
-            body: JSON.stringify({ name: key, data: value }),
-          })
-        } else {
-          throw err
-        }
-      }
+      await upsertPreference(key, value)
     },
 
     /**
@@ -131,26 +150,11 @@ export function createFireflyClient(baseUrl, pat) {
 
     /**
      * Writes last-run status to a separate read-only preference consumed by the SPA.
-     * Uses PUT→POST fallback (same as putPreference). Errors are swallowed (non-critical).
+     * Uses internal upsertPreference (PUT→POST fallback). Errors are swallowed (non-critical).
      */
     async writeLastRun(lastRun) {
-      const key = 'costExplorer.ratesSidecar.lastRun'
       try {
-        try {
-          await request(`/preferences/${encodeURIComponent(key)}`, {
-            method: 'PUT',
-            body: JSON.stringify({ name: key, data: lastRun }),
-          })
-        } catch (err) {
-          if (err.status === 404) {
-            await request('/preferences', {
-              method: 'POST',
-              body: JSON.stringify({ name: key, data: lastRun }),
-            })
-          } else {
-            throw err
-          }
-        }
+        await upsertPreference('costExplorer.ratesSidecar.lastRun', lastRun)
       } catch {
         // Non-critical — swallow silently (caller logs if needed)
       }
