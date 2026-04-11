@@ -37,8 +37,12 @@ export async function getPreference<T>(
 
 /**
  * Create or update a named Firefly III preference.
- * Uses PUT which acts as upsert on Firefly III ≥6.x.
- * Throws on network or API error.
+ *
+ * Strategy: PUT first (update). If Firefly returns 404 (preference does not
+ * exist yet), fall back to POST (create). Any other error re-throws.
+ *
+ * PUT body: { data }   — name is in the URL path.
+ * POST body: { name, data } — name required in the body for resource creation.
  */
 export async function putPreference<T>(
   baseUrl: string,
@@ -47,11 +51,27 @@ export async function putPreference<T>(
   data: T
 ): Promise<void> {
   const client = createApiClient(baseUrl, token)
-  await client.fetch<PreferenceResponse<T>>(
-    `/preferences/${encodeURIComponent(name)}`,
-    {
-      method: 'PUT',
-      body: JSON.stringify({ name, data }),
+  try {
+    await client.fetch<PreferenceResponse<T>>(
+      `/preferences/${encodeURIComponent(name)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ data }),
+      }
+    )
+  } catch (err) {
+    if (err instanceof ApiError && err.statusCode === 404) {
+      // Preference does not exist yet — create via POST
+      // (Firefly III PUT may not upsert on all versions)
+      await client.fetch<PreferenceResponse<T>>(
+        '/preferences',
+        {
+          method: 'POST',
+          body: JSON.stringify({ name, data }),
+        }
+      )
+      return
     }
-  )
+    throw err
+  }
 }

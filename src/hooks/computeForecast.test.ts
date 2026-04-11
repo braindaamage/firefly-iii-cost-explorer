@@ -1,50 +1,88 @@
 import { describe, it, expect } from 'vitest'
 import { computeForecast } from './computeForecast'
-import type { ComputeForecastInputs, HistoryMonthInput, PendingBill } from './computeForecast'
+import type {
+  ComputeForecastInputs,
+  ForecastQueryState,
+  ExpenseNoBillEntry,
+} from './computeForecast'
+import type { Bill } from '../api/bills'
 
 // ---------------------------------------------------------------------------
-// Fixtures
+// Test fixtures
 // ---------------------------------------------------------------------------
 
 const EUR = { code: 'EUR', symbol: '€', decimalPlaces: 2 }
 
-/** April 11 2026 — mid-month baseline */
-const TODAY = new Date(2026, 3, 11) // month is 0-indexed
+/** April 11 2026 — mid-month baseline: daysInMonth=30, daysElapsed=11, daysRemaining=19 */
+const TODAY = new Date(2026, 3, 11) // months are 0-indexed
 
-const BASE_BILL: PendingBill = { id: '1', name: 'Netflix', amount: 14.23, date: '2026-04-20' }
-const SPOTIFY: PendingBill = { id: '2', name: 'Spotify', amount: 9.99, date: '2026-04-28' }
+// Helpers to build ForecastQueryState objects
+function success<T>(data: T): ForecastQueryState<T> {
+  return { status: 'success', data }
+}
+function pending<T>(): ForecastQueryState<T> {
+  return { status: 'pending', data: null }
+}
+function error<T>(): ForecastQueryState<T> {
+  return { status: 'error', data: null }
+}
 
-/** March 2026: 31 days, €620 variable spend */
-const MARCH: HistoryMonthInput = { variableSpend: 620, daysInMonth: 31 }
-/** February 2026: 28 days, €560 variable spend */
-const FEB: HistoryMonthInput = { variableSpend: 560, daysInMonth: 28 }
-/** January 2026: 31 days, €700 variable spend */
-const JAN: HistoryMonthInput = { variableSpend: 700, daysInMonth: 31 }
+// Build an InsightEntry for a given currency code and spend amount (positive = expense)
+function entry(currencyCode: string, spend: number): ExpenseNoBillEntry {
+  return {
+    id: '1',
+    name: 'Variable spend',
+    difference: String(-spend),
+    difference_float: -spend, // negative = expense
+    currency_id: '1',
+    currency_code: currencyCode,
+    currency_symbol: currencyCode === 'EUR' ? '€' : '$',
+  }
+}
+
+// Build a historical month query (success)
+function historyMonth(spend: number, daysInMonth: number, currency = 'EUR') {
+  return success({ entries: [entry(currency, spend)], daysInMonth })
+}
+
+// Build a bill fixture
+function makeBill(overrides: Partial<Bill> = {}): Bill {
+  return {
+    id: '1',
+    name: 'Netflix',
+    active: true,
+    currencyCode: 'EUR',
+    currencySymbol: '€',
+    currencyDecimalPlaces: 2,
+    amountMin: 12.99,
+    amountMax: 12.99,
+    amountAvg: 12.99,
+    pcAmountMin: 14.00,
+    pcAmountMax: 14.50,
+    pcAmountAvg: 14.23,
+    payDates: ['2026-04-20'],
+    paidDates: [],
+    ...overrides,
+  }
+}
+
+const DEFAULT_MTD = success({ amount: 450, currencyCode: 'EUR' })
+
+// 3 historical months for default inputs
+const MARCH = historyMonth(620, 31)  // most recent: 620/31 ≈ 20.0/day
+const FEB = historyMonth(560, 28)    // 560/28 = 20.0/day
+const JAN = historyMonth(700, 31)    // 700/31 ≈ 22.6/day
 
 function makeInputs(overrides: Partial<ComputeForecastInputs> = {}): ComputeForecastInputs {
   return {
     today: TODAY,
     config: { historyMonths: 3, model: 'weighted' },
     primaryCurrency: EUR,
-    historyStatuses: ['success', 'success', 'success'],
-    mtdStatus: 'success',
-    billsStatus: 'success',
-    historyData: [MARCH, FEB, JAN],
-    mtdSpent: 450,
-    pendingBills: [BASE_BILL],
+    historicalQueries: [MARCH, FEB, JAN],
+    mtdQuery: DEFAULT_MTD,
+    billsQuery: success([makeBill()]),
     ...overrides,
   }
-}
-
-// ---------------------------------------------------------------------------
-// Helper
-// ---------------------------------------------------------------------------
-
-function dateInfo(today: Date = TODAY) {
-  const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate()
-  const daysElapsed = today.getDate()
-  const daysRemaining = daysInMonth - daysElapsed
-  return { daysInMonth, daysElapsed, daysRemaining }
 }
 
 // ---------------------------------------------------------------------------
@@ -52,35 +90,35 @@ function dateInfo(today: Date = TODAY) {
 // ---------------------------------------------------------------------------
 
 describe('computeForecast — status: loading', () => {
-  it('returns loading when mtdStatus is pending', () => {
-    const result = computeForecast(makeInputs({ mtdStatus: 'pending' }))
-    expect(result.status).toBe('loading')
+  it('returns loading when mtdQuery is pending', () => {
+    expect(computeForecast(makeInputs({ mtdQuery: pending() })).status).toBe('loading')
   })
 
-  it('returns loading when billsStatus is pending', () => {
-    const result = computeForecast(makeInputs({ billsStatus: 'pending' }))
-    expect(result.status).toBe('loading')
+  it('returns loading when billsQuery is pending', () => {
+    expect(computeForecast(makeInputs({ billsQuery: pending() })).status).toBe('loading')
   })
 
-  it('returns loading when any historyStatus is pending', () => {
+  it('returns loading when any historicalQuery is pending', () => {
     const result = computeForecast(
-      makeInputs({ historyStatuses: ['success', 'pending', 'success'] })
-    )
-    expect(result.status).toBe('loading')
-  })
-
-  it('returns loading when all historyStatuses are pending', () => {
-    const result = computeForecast(
-      makeInputs({ historyStatuses: ['pending', 'pending', 'pending'] })
+      makeInputs({ historicalQueries: [MARCH, pending(), JAN] })
     )
     expect(result.status).toBe('loading')
   })
 
   it('loading result has null currency and null totals', () => {
-    const result = computeForecast(makeInputs({ mtdStatus: 'pending' }))
+    const result = computeForecast(makeInputs({ mtdQuery: pending() }))
     expect(result.currency).toBeNull()
     expect(result.mtdSpent).toBeNull()
     expect(result.total).toBeNull()
+    expect(result.breakdown.daysInMonth).toBe(0)
+  })
+
+  it('loading takes precedence over all other states', () => {
+    // Even if mtd is error, pending should dominate
+    const result = computeForecast(
+      makeInputs({ mtdQuery: error(), billsQuery: pending() })
+    )
+    expect(result.status).toBe('loading')
   })
 })
 
@@ -95,21 +133,33 @@ describe('computeForecast — status: unavailable', () => {
     expect(result.currency).toBeNull()
   })
 
-  it('returns unavailable when mtdStatus and billsStatus are both error', () => {
+  it('returns unavailable when historyMonthsUsed=0 AND bills failed', () => {
     const result = computeForecast(
-      makeInputs({ mtdStatus: 'error', billsStatus: 'error', mtdSpent: null })
+      makeInputs({
+        historicalQueries: [error(), error(), error()],
+        billsQuery: error(),
+      })
     )
     expect(result.status).toBe('unavailable')
   })
 
-  it('unavailable result includes correct date info', () => {
+  it('unavailable includes date info in breakdown', () => {
+    const result = computeForecast(makeInputs({ primaryCurrency: null }))
+    expect(result.breakdown.daysInMonth).toBe(30)
+    expect(result.breakdown.daysElapsed).toBe(11)
+    expect(result.breakdown.daysRemaining).toBe(19)
+  })
+
+  it('unavailable when no history+no bills still exposes mtdSpent (only thing known)', () => {
     const result = computeForecast(
-      makeInputs({ mtdStatus: 'error', billsStatus: 'error', mtdSpent: null })
+      makeInputs({
+        historicalQueries: [error(), error(), error()],
+        billsQuery: error(),
+        mtdQuery: success({ amount: 300, currencyCode: 'EUR' }),
+      })
     )
-    const { daysInMonth, daysElapsed, daysRemaining } = dateInfo()
-    expect(result.breakdown.daysInMonth).toBe(daysInMonth)
-    expect(result.breakdown.daysElapsed).toBe(daysElapsed)
-    expect(result.breakdown.daysRemaining).toBe(daysRemaining)
+    expect(result.mtdSpent).toBe(300)
+    expect(result.total).toBe(300) // total = mtdSpent when nothing else known
   })
 })
 
@@ -118,38 +168,34 @@ describe('computeForecast — status: unavailable', () => {
 // ---------------------------------------------------------------------------
 
 describe('computeForecast — status: error', () => {
-  it('returns error when mtdStatus is error but billsStatus is success', () => {
-    const result = computeForecast(
-      makeInputs({ mtdStatus: 'error', mtdSpent: null })
-    )
+  it('returns error when mtdQuery fails (bills ok)', () => {
+    const result = computeForecast(makeInputs({ mtdQuery: error() }))
     expect(result.status).toBe('error')
   })
 
   it('error result has null mtdSpent and null total', () => {
-    const result = computeForecast(
-      makeInputs({ mtdStatus: 'error', mtdSpent: null })
-    )
+    const result = computeForecast(makeInputs({ mtdQuery: error() }))
     expect(result.mtdSpent).toBeNull()
     expect(result.total).toBeNull()
   })
 
-  it('error result includes pending bills in breakdown when bills succeeded', () => {
+  it('error result includes pendingBills in breakdown when bills succeeded', () => {
+    const bill = makeBill({ id: '99', payDates: ['2026-04-20'] })
     const result = computeForecast(
-      makeInputs({ mtdStatus: 'error', mtdSpent: null, pendingBills: [BASE_BILL] })
+      makeInputs({ mtdQuery: error(), billsQuery: success([bill]) })
     )
-    expect(result.breakdown.pendingBills).toEqual([BASE_BILL])
+    expect(result.breakdown.pendingBills).toHaveLength(1)
+    expect(result.breakdown.pendingBills[0].id).toBe('99')
   })
 
-  it('error result has empty pendingBills in breakdown when bills also errored', () => {
-    // This case is unreachable in practice (would be 'unavailable') but let's guard
-    // — handled as error since mtdStatus=error takes priority over the bills check
-    // Actually: if mtd=error and bills=error → unavailable (tested above).
-    // If mtd=error and bills=success → error with pendingBills.
-    // So this branch tests: mtd=error, bills=error → unavailable (not error).
+  it('error precedes unavailable (mtd error + bills error → error, not unavailable)', () => {
+    // When both mtd and bills fail, error takes priority over unavailable
+    // because error is detected before checking the unavailable matrix
     const result = computeForecast(
-      makeInputs({ mtdStatus: 'error', billsStatus: 'error', mtdSpent: null })
+      makeInputs({ mtdQuery: error(), billsQuery: error() })
     )
-    expect(result.status).toBe('unavailable') // unavailable takes priority
+    // mtdQuery.error is checked first → status = 'error'
+    expect(result.status).toBe('error')
   })
 })
 
@@ -158,75 +204,63 @@ describe('computeForecast — status: error', () => {
 // ---------------------------------------------------------------------------
 
 describe('computeForecast — status: partialNoHistory', () => {
-  it('returns partialNoHistory when all historyData are null (all errored)', () => {
+  it('returns partialNoHistory when all history errored but bills ok', () => {
     const result = computeForecast(
-      makeInputs({
-        historyStatuses: ['error', 'error', 'error'],
-        historyData: [null, null, null],
-      })
+      makeInputs({ historicalQueries: [error(), error(), error()] })
     )
     expect(result.status).toBe('partialNoHistory')
   })
 
-  it('variableForecast is null in partialNoHistory', () => {
+  it('returns partialNoHistory when 2 of 3 months succeed (historyMonthsUsed < configN)', () => {
     const result = computeForecast(
-      makeInputs({
-        historyStatuses: ['error', 'error', 'error'],
-        historyData: [null, null, null],
-      })
+      makeInputs({ historicalQueries: [MARCH, error(), JAN] })
+    )
+    expect(result.status).toBe('partialNoHistory')
+    expect(result.breakdown.historyMonthsUsed).toBe(2)
+  })
+
+  it('variableForecast is null when historyMonthsUsed=0', () => {
+    const result = computeForecast(
+      makeInputs({ historicalQueries: [error(), error(), error()] })
     )
     expect(result.variableForecast).toBeNull()
     expect(result.breakdown.weightedAvgDaily).toBeNull()
   })
 
-  it('billsForecast is computed from pendingBills in partialNoHistory', () => {
+  it('variableForecast is computed when historyMonthsUsed>0 (partial history)', () => {
     const result = computeForecast(
-      makeInputs({
-        historyStatuses: ['error', 'error', 'error'],
-        historyData: [null, null, null],
-        pendingBills: [BASE_BILL, SPOTIFY],
-      })
+      makeInputs({ historicalQueries: [MARCH, error(), JAN] })
     )
-    expect(result.billsForecast).toBeCloseTo(BASE_BILL.amount + SPOTIFY.amount, 5)
+    expect(result.variableForecast).not.toBeNull()
+    expect(result.variableForecast).toBeGreaterThan(0)
   })
 
-  it('total = mtdSpent + billsForecast in partialNoHistory', () => {
+  it('billsForecast included in total when bills available', () => {
+    const bill = makeBill({ pcAmountAvg: 14.23, payDates: ['2026-04-20'] })
     const result = computeForecast(
       makeInputs({
-        historyStatuses: ['error', 'error', 'error'],
-        historyData: [null, null, null],
-        mtdSpent: 450,
-        pendingBills: [BASE_BILL],
+        historicalQueries: [error(), error(), error()],
+        billsQuery: success([bill]),
+        mtdQuery: success({ amount: 450, currencyCode: 'EUR' }),
       })
     )
-    expect(result.total).toBeCloseTo(450 + BASE_BILL.amount, 5)
+    expect(result.billsForecast).toBeCloseTo(14.23, 5)
+    expect(result.total).toBeCloseTo(450 + 14.23, 5) // variableForecast=null → 0
   })
 
-  it('historyMonthsUsed is 0 in partialNoHistory', () => {
+  it('historyMonthsUsed is 2 when 1 of 3 errored', () => {
     const result = computeForecast(
-      makeInputs({
-        historyStatuses: ['error', 'error', 'error'],
-        historyData: [null, null, null],
-      })
+      makeInputs({ historicalQueries: [MARCH, error(), JAN] })
     )
-    expect(result.breakdown.historyMonthsUsed).toBe(0)
+    expect(result.breakdown.historyMonthsUsed).toBe(2)
   })
 
-  it('total is null when billsForecast is unavailable too (bills errored)', () => {
-    // bills also errored → billsForecast null, total null
+  it('partialNoHistory precedes partialNoBills', () => {
+    // 2 of 3 history months + bills also fail → partialNoHistory wins
     const result = computeForecast(
-      makeInputs({
-        historyStatuses: ['error', 'error', 'error'],
-        historyData: [null, null, null],
-        billsStatus: 'error',
-      })
+      makeInputs({ historicalQueries: [MARCH, error(), JAN], billsQuery: error() })
     )
-    // But wait: mtd=success, bills=error, history=all error
-    // → historyMonthsUsed=0 → partialNoHistory path
-    // → billsForecast=null, total=null
     expect(result.status).toBe('partialNoHistory')
-    expect(result.billsForecast).toBeNull()
-    expect(result.total).toBeNull()
   })
 })
 
@@ -235,29 +269,29 @@ describe('computeForecast — status: partialNoHistory', () => {
 // ---------------------------------------------------------------------------
 
 describe('computeForecast — status: partialNoBills', () => {
-  it('returns partialNoBills when billsStatus is error (history and MTD ok)', () => {
-    const result = computeForecast(makeInputs({ billsStatus: 'error' }))
+  it('returns partialNoBills when bills errored and all history ok', () => {
+    const result = computeForecast(makeInputs({ billsQuery: error() }))
     expect(result.status).toBe('partialNoBills')
   })
 
   it('billsForecast is null in partialNoBills', () => {
-    const result = computeForecast(makeInputs({ billsStatus: 'error' }))
+    const result = computeForecast(makeInputs({ billsQuery: error() }))
     expect(result.billsForecast).toBeNull()
   })
 
   it('variableForecast is computed normally in partialNoBills', () => {
-    const result = computeForecast(makeInputs({ billsStatus: 'error' }))
+    const result = computeForecast(makeInputs({ billsQuery: error() }))
     expect(result.variableForecast).not.toBeNull()
     expect(result.variableForecast).toBeGreaterThan(0)
   })
 
-  it('total = mtdSpent + variableForecast in partialNoBills', () => {
-    const result = computeForecast(makeInputs({ billsStatus: 'error', mtdSpent: 450 }))
-    expect(result.total).toBeCloseTo(450 + result.variableForecast!, 5)
+  it('total = mtdSpent + variableForecast when bills null', () => {
+    const result = computeForecast(makeInputs({ billsQuery: error() }))
+    expect(result.total).toBeCloseTo(result.mtdSpent! + result.variableForecast!, 8)
   })
 
-  it('pendingBills in breakdown is empty array in partialNoBills', () => {
-    const result = computeForecast(makeInputs({ billsStatus: 'error' }))
+  it('pendingBills in breakdown is empty in partialNoBills', () => {
+    const result = computeForecast(makeInputs({ billsQuery: error() }))
     expect(result.breakdown.pendingBills).toEqual([])
   })
 })
@@ -267,59 +301,43 @@ describe('computeForecast — status: partialNoBills', () => {
 // ---------------------------------------------------------------------------
 
 describe('computeForecast — status: ok', () => {
-  it('returns ok when all data is available', () => {
+  it('returns ok when all queries succeed with full history', () => {
     expect(computeForecast(makeInputs()).status).toBe('ok')
   })
 
-  it('propagates currency correctly', () => {
-    const result = computeForecast(makeInputs())
-    expect(result.currency).toEqual(EUR)
-  })
-
-  it('mtdSpent is passed through unchanged', () => {
-    const result = computeForecast(makeInputs({ mtdSpent: 450 }))
-    expect(result.mtdSpent).toBe(450)
+  it('currency is passed through', () => {
+    expect(computeForecast(makeInputs()).currency).toEqual(EUR)
   })
 
   it('total = mtdSpent + variableForecast + billsForecast', () => {
-    const result = computeForecast(makeInputs({ pendingBills: [BASE_BILL] }))
+    const result = computeForecast(makeInputs())
     expect(result.total).toBeCloseTo(
       result.mtdSpent! + result.variableForecast! + result.billsForecast!,
       8
     )
   })
 
-  it('billsForecast = sum of all pendingBills amounts', () => {
-    const result = computeForecast(
-      makeInputs({ pendingBills: [BASE_BILL, SPOTIFY] })
-    )
-    expect(result.billsForecast).toBeCloseTo(BASE_BILL.amount + SPOTIFY.amount, 5)
+  it('billsForecast = sum of all pendingBill amounts', () => {
+    const bill1 = makeBill({ id: '1', pcAmountAvg: 14.23, payDates: ['2026-04-20'] })
+    const bill2 = makeBill({ id: '2', name: 'Spotify', pcAmountAvg: 9.99, payDates: ['2026-04-28'] })
+    const result = computeForecast(makeInputs({ billsQuery: success([bill1, bill2]) }))
+    expect(result.billsForecast).toBeCloseTo(14.23 + 9.99, 5)
   })
 
-  it('billsForecast = 0 when no pending bills', () => {
-    const result = computeForecast(makeInputs({ pendingBills: [] }))
+  it('billsForecast = 0 when no bills have pay_dates in range', () => {
+    const billNoMatch = makeBill({ payDates: ['2026-03-15'] }) // past date
+    const result = computeForecast(makeInputs({ billsQuery: success([billNoMatch]) }))
     expect(result.billsForecast).toBe(0)
+    expect(result.breakdown.pendingBills).toEqual([])
   })
 
-  it('pendingBills in breakdown matches the input pendingBills', () => {
-    const result = computeForecast(makeInputs({ pendingBills: [BASE_BILL, SPOTIFY] }))
-    expect(result.breakdown.pendingBills).toEqual([BASE_BILL, SPOTIFY])
+  it('historyMonthsUsed = config.historyMonths in ok state', () => {
+    expect(computeForecast(makeInputs()).breakdown.historyMonthsUsed).toBe(3)
   })
 
-  it('historyMonthsUsed reflects actual valid months (all 3 valid)', () => {
-    const result = computeForecast(makeInputs())
-    expect(result.breakdown.historyMonthsUsed).toBe(3)
-  })
-
-  it('historyMonthsUsed reflects actual valid months (1 errored, 2 valid)', () => {
-    const result = computeForecast(
-      makeInputs({
-        historyStatuses: ['success', 'error', 'success'],
-        historyData: [MARCH, null, JAN],
-      })
-    )
-    expect(result.status).toBe('ok')
-    expect(result.breakdown.historyMonthsUsed).toBe(2)
+  it('mtdSpent is passed through unchanged', () => {
+    const result = computeForecast(makeInputs({ mtdQuery: success({ amount: 1234.56, currencyCode: 'EUR' }) }))
+    expect(result.mtdSpent).toBe(1234.56)
   })
 })
 
@@ -328,49 +346,47 @@ describe('computeForecast — status: ok', () => {
 // ---------------------------------------------------------------------------
 
 describe('computeForecast — date calculations', () => {
-  it('April 11 2026: daysInMonth=30, daysElapsed=11, daysRemaining=19', () => {
+  it('April 11: daysInMonth=30, daysElapsed=11, daysRemaining=19', () => {
     const result = computeForecast(makeInputs({ today: new Date(2026, 3, 11) }))
     expect(result.breakdown.daysInMonth).toBe(30)
     expect(result.breakdown.daysElapsed).toBe(11)
     expect(result.breakdown.daysRemaining).toBe(19)
   })
 
-  it('April 30 (last day): daysRemaining=0 → variableForecast=0', () => {
+  it('last day of month: daysRemaining=0 → variableForecast=0', () => {
     const result = computeForecast(makeInputs({ today: new Date(2026, 3, 30) }))
     expect(result.breakdown.daysRemaining).toBe(0)
     expect(result.variableForecast).toBe(0)
   })
 
-  it('April 1 (first day): daysElapsed=1, daysRemaining=29', () => {
+  it('first day of month: daysElapsed=1, daysRemaining=29', () => {
     const result = computeForecast(makeInputs({ today: new Date(2026, 3, 1) }))
     expect(result.breakdown.daysElapsed).toBe(1)
     expect(result.breakdown.daysRemaining).toBe(29)
   })
 
-  it('February 28 2026 (non-leap): daysInMonth=28', () => {
+  it('February 2026 (non-leap): daysInMonth=28', () => {
     const result = computeForecast(
       makeInputs({
-        today: new Date(2026, 1, 28),
-        historyData: [
-          { variableSpend: 600, daysInMonth: 31 }, // Jan
-          { variableSpend: 550, daysInMonth: 31 }, // Dec
-          { variableSpend: 580, daysInMonth: 30 }, // Nov
+        today: new Date(2026, 1, 15),
+        historicalQueries: [
+          historyMonth(600, 31), // Jan
+          historyMonth(550, 31), // Dec
+          historyMonth(580, 30), // Nov
         ],
       })
     )
     expect(result.breakdown.daysInMonth).toBe(28)
-    expect(result.breakdown.daysElapsed).toBe(28)
-    expect(result.breakdown.daysRemaining).toBe(0)
   })
 
-  it('February 29 2028 (leap year): daysInMonth=29', () => {
+  it('February 2028 (leap year): daysInMonth=29', () => {
     const result = computeForecast(
       makeInputs({
         today: new Date(2028, 1, 15),
-        historyData: [
-          { variableSpend: 600, daysInMonth: 31 },
-          { variableSpend: 550, daysInMonth: 31 },
-          { variableSpend: 580, daysInMonth: 30 },
+        historicalQueries: [
+          historyMonth(600, 31),
+          historyMonth(550, 31),
+          historyMonth(580, 30),
         ],
       })
     )
@@ -387,35 +403,24 @@ describe('computeForecast — weightedAvgDaily calculation', () => {
     const result = computeForecast(
       makeInputs({
         config: { historyMonths: 1, model: 'weighted' },
-        historyStatuses: ['success'],
-        historyData: [MARCH], // 620 / 31
+        historicalQueries: [historyMonth(620, 31)],
       })
     )
     expect(result.breakdown.weightedAvgDaily).toBeCloseTo(620 / 31, 8)
   })
 
-  it('N=3 weighted: most recent month has highest influence', () => {
-    // March (most recent): 620/31 ≈ 20.0/day
-    // Feb:                 560/28 = 20.0/day
-    // Jan:                 700/31 ≈ 22.6/day
-    // Weighted: 0.5 * (620/31) + (1/3) * (560/28) + (1/6) * (700/31)
+  it('N=3 weighted: correct linear-descending weighted average', () => {
     const w0 = 3 / 6 // 0.5
-    const w1 = 2 / 6 // 0.333...
-    const w2 = 1 / 6 // 0.166...
+    const w1 = 2 / 6
+    const w2 = 1 / 6
     const expected =
-      w0 * (MARCH.variableSpend / MARCH.daysInMonth) +
-      w1 * (FEB.variableSpend / FEB.daysInMonth) +
-      w2 * (JAN.variableSpend / JAN.daysInMonth)
+      w0 * (620 / 31) + w1 * (560 / 28) + w2 * (700 / 31)
     const result = computeForecast(makeInputs())
     expect(result.breakdown.weightedAvgDaily).toBeCloseTo(expected, 8)
   })
 
   it('N=3 simple: weightedAvgDaily = arithmetic mean of daily rates', () => {
-    const expected =
-      ((MARCH.variableSpend / MARCH.daysInMonth) +
-        (FEB.variableSpend / FEB.daysInMonth) +
-        (JAN.variableSpend / JAN.daysInMonth)) /
-      3
+    const expected = ((620 / 31) + (560 / 28) + (700 / 31)) / 3
     const result = computeForecast(
       makeInputs({ config: { historyMonths: 3, model: 'simple' } })
     )
@@ -428,20 +433,132 @@ describe('computeForecast — weightedAvgDaily calculation', () => {
     expect(result.variableForecast).toBeCloseTo(weightedAvgDaily! * daysRemaining, 8)
   })
 
-  it('gap months are excluded from weighted average (2 valid, 1 null)', () => {
-    // Only MARCH and JAN are valid; weights are recomputed for N=2
+  it('gap months excluded: 2 valid of 3, recomputed weights (N=2)', () => {
     const w0 = 2 / 3
     const w1 = 1 / 3
-    const expected =
-      w0 * (MARCH.variableSpend / MARCH.daysInMonth) +
-      w1 * (JAN.variableSpend / JAN.daysInMonth)
+    const expected = w0 * (620 / 31) + w1 * (700 / 31)
+    const result = computeForecast(
+      makeInputs({ historicalQueries: [MARCH, error(), JAN] })
+    )
+    // Note: status is partialNoHistory (2 < 3), but calculation is still correct
+    expect(result.breakdown.weightedAvgDaily).toBeCloseTo(expected, 8)
+  })
+
+  it('N=1 simple === N=1 weighted (computeWeights(1, *) = [1])', () => {
+    const simpleResult = computeForecast(
+      makeInputs({ config: { historyMonths: 1, model: 'simple' }, historicalQueries: [MARCH] })
+    )
+    const weightedResult = computeForecast(
+      makeInputs({ config: { historyMonths: 1, model: 'weighted' }, historicalQueries: [MARCH] })
+    )
+    expect(simpleResult.breakdown.weightedAvgDaily).toBeCloseTo(
+      weightedResult.breakdown.weightedAvgDaily!,
+      8
+    )
+  })
+
+  it('history entry with non-primary currency excluded from calculation', () => {
+    const usdEntry = entry('USD', 500)
+    const eurEntry = entry('EUR', 620)
+    // Month has both USD and EUR entries — only EUR should contribute
+    const mixedMonth = success({ entries: [usdEntry, eurEntry], daysInMonth: 31 })
     const result = computeForecast(
       makeInputs({
-        historyStatuses: ['success', 'error', 'success'],
-        historyData: [MARCH, null, JAN],
+        config: { historyMonths: 1, model: 'simple' },
+        historicalQueries: [mixedMonth],
       })
     )
-    expect(result.breakdown.weightedAvgDaily).toBeCloseTo(expected, 8)
+    // Only EUR 620 used: 620/31
+    expect(result.breakdown.weightedAvgDaily).toBeCloseTo(620 / 31, 8)
+    expect(result.status).toBe('ok')
+  })
+
+  it('history month with only non-primary currency entries excluded entirely', () => {
+    const usdOnlyMonth = success({ entries: [entry('USD', 500)], daysInMonth: 31 })
+    const result = computeForecast(
+      makeInputs({
+        historicalQueries: [MARCH, usdOnlyMonth, JAN],
+        config: { historyMonths: 3, model: 'weighted' },
+      })
+    )
+    // Only MARCH and JAN contribute → partialNoHistory (2 < 3)
+    expect(result.status).toBe('partialNoHistory')
+    expect(result.breakdown.historyMonthsUsed).toBe(2)
+  })
+
+  it('daysInMonth=0 in historical query is skipped (defensive)', () => {
+    const badMonth = success({ entries: [entry('EUR', 500)], daysInMonth: 0 })
+    const result = computeForecast(
+      makeInputs({ historicalQueries: [MARCH, badMonth, JAN] })
+    )
+    expect(result.breakdown.historyMonthsUsed).toBe(2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Bill filtering logic
+// ---------------------------------------------------------------------------
+
+describe('computeForecast — bill filtering', () => {
+  it('bill payDate on today is excluded (today is already in MTD)', () => {
+    const todayBill = makeBill({ payDates: ['2026-04-11'] }) // today
+    const result = computeForecast(makeInputs({ billsQuery: success([todayBill]) }))
+    expect(result.breakdown.pendingBills).toEqual([])
+    expect(result.billsForecast).toBe(0)
+  })
+
+  it('bill payDate strictly after today is included', () => {
+    const futureBill = makeBill({ payDates: ['2026-04-12'] }) // tomorrow
+    const result = computeForecast(makeInputs({ billsQuery: success([futureBill]) }))
+    expect(result.breakdown.pendingBills).toHaveLength(1)
+  })
+
+  it('bill payDate beyond end-of-month is excluded', () => {
+    const nextMonthBill = makeBill({ payDates: ['2026-05-01'] })
+    const result = computeForecast(makeInputs({ billsQuery: success([nextMonthBill]) }))
+    expect(result.breakdown.pendingBills).toEqual([])
+  })
+
+  it('last day of month payDate is included', () => {
+    const lastDayBill = makeBill({ payDates: ['2026-04-30'] })
+    const result = computeForecast(makeInputs({ billsQuery: success([lastDayBill]) }))
+    expect(result.breakdown.pendingBills).toHaveLength(1)
+  })
+
+  it('bill with multiple payDates in range generates multiple pendingBill entries', () => {
+    const multiBill = makeBill({ payDates: ['2026-04-15', '2026-04-25'] })
+    const result = computeForecast(makeInputs({ billsQuery: success([multiBill]) }))
+    expect(result.breakdown.pendingBills).toHaveLength(2)
+    expect(result.billsForecast).toBeCloseTo(14.23 * 2, 5)
+  })
+
+  it('inactive bill is ignored', () => {
+    const inactiveBill = makeBill({ active: false })
+    const result = computeForecast(makeInputs({ billsQuery: success([inactiveBill]) }))
+    expect(result.breakdown.pendingBills).toEqual([])
+    expect(result.billsForecast).toBe(0)
+  })
+
+  it('already-paid payDate is excluded (matches paidDates)', () => {
+    const paidBill = makeBill({
+      payDates: ['2026-04-20'],
+      paidDates: [{ date: '2026-04-20', transactionJournalId: '5', transactionGroupId: '3' }],
+    })
+    const result = computeForecast(makeInputs({ billsQuery: success([paidBill]) }))
+    expect(result.breakdown.pendingBills).toEqual([])
+    expect(result.billsForecast).toBe(0)
+  })
+
+  it('uses pcAmountAvg when available', () => {
+    const bill = makeBill({ pcAmountAvg: 14.23, amountAvg: 12.99 })
+    const result = computeForecast(makeInputs({ billsQuery: success([bill]) }))
+    expect(result.breakdown.pendingBills[0].amount).toBeCloseTo(14.23, 5)
+  })
+
+  it('falls back to amountAvg when pcAmountAvg is null', () => {
+    const bill = makeBill({ pcAmountAvg: null, amountAvg: 12.99 })
+    const result = computeForecast(makeInputs({ billsQuery: success([bill]) }))
+    expect(result.breakdown.pendingBills[0].amount).toBeCloseTo(12.99, 5)
   })
 })
 
@@ -450,43 +567,54 @@ describe('computeForecast — weightedAvgDaily calculation', () => {
 // ---------------------------------------------------------------------------
 
 describe('computeForecast — edge cases', () => {
-  it('single pending bill: billsForecast equals that bill amount', () => {
-    const result = computeForecast(makeInputs({ pendingBills: [BASE_BILL] }))
-    expect(result.billsForecast).toBeCloseTo(BASE_BILL.amount, 8)
-  })
-
-  it('mtdSpent=0 (beginning of month): total includes only forecast components', () => {
-    const result = computeForecast(makeInputs({ mtdSpent: 0 }))
-    expect(result.mtdSpent).toBe(0)
-    expect(result.total).toBeCloseTo(result.variableForecast! + result.billsForecast!, 8)
-  })
-
-  it('all history months have same daily rate: simple and weighted give same result', () => {
-    const uniform: HistoryMonthInput = { variableSpend: 620, daysInMonth: 31 }
+  it('all history months same daily rate: simple and weighted give same result', () => {
+    const uniform = historyMonth(620, 31) // 20/day
     const simpleResult = computeForecast(
       makeInputs({
         config: { historyMonths: 3, model: 'simple' },
-        historyData: [uniform, uniform, uniform],
+        historicalQueries: [uniform, uniform, uniform],
       })
     )
     const weightedResult = computeForecast(
       makeInputs({
         config: { historyMonths: 3, model: 'weighted' },
-        historyData: [uniform, uniform, uniform],
+        historicalQueries: [uniform, uniform, uniform],
       })
     )
     expect(simpleResult.variableForecast).toBeCloseTo(weightedResult.variableForecast!, 8)
   })
 
-  it('N=1 history: historyMonthsUsed=1, status ok', () => {
+  it('daysRemaining=0 on last day: variableForecast=0, total=mtd+bills', () => {
+    const result = computeForecast(makeInputs({ today: new Date(2026, 3, 30) }))
+    expect(result.variableForecast).toBe(0)
+    expect(result.total).toBeCloseTo(result.mtdSpent! + result.billsForecast!, 8)
+  })
+
+  it('mtdSpent=0 (beginning of month): total = variableForecast + billsForecast', () => {
+    const result = computeForecast(
+      makeInputs({ mtdQuery: success({ amount: 0, currencyCode: 'EUR' }) })
+    )
+    expect(result.mtdSpent).toBe(0)
+    expect(result.total).toBeCloseTo(result.variableForecast! + result.billsForecast!, 8)
+  })
+
+  it('total formula: mtd + (variable ?? 0) + (bills ?? 0)', () => {
+    // partialNoHistory: variableForecast=null, billsForecast=14.23, mtd=450
+    const bill = makeBill({ pcAmountAvg: 14.23 })
     const result = computeForecast(
       makeInputs({
-        config: { historyMonths: 1, model: 'weighted' },
-        historyStatuses: ['success'],
-        historyData: [MARCH],
+        historicalQueries: [error(), error(), error()],
+        billsQuery: success([bill]),
+        mtdQuery: success({ amount: 450, currencyCode: 'EUR' }),
       })
     )
-    expect(result.status).toBe('ok')
-    expect(result.breakdown.historyMonthsUsed).toBe(1)
+    // variable=null → 0; total = 450 + 0 + 14.23
+    expect(result.total).toBeCloseTo(450 + 14.23, 5)
+  })
+
+  it('no bills at all: billsForecast=0, total=mtd+variableForecast', () => {
+    const result = computeForecast(makeInputs({ billsQuery: success([]) }))
+    expect(result.billsForecast).toBe(0)
+    expect(result.total).toBeCloseTo(result.mtdSpent! + result.variableForecast!, 8)
   })
 })

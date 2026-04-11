@@ -97,12 +97,18 @@ describe('computeWeights — weighted model', () => {
 })
 
 describe('computeWeights — edge cases', () => {
-  it('N=0 returns empty array', () => {
-    expect(computeWeights(0, 'simple')).toEqual([])
-    expect(computeWeights(0, 'weighted')).toEqual([])
+  it('N=0 throws RangeError', () => {
+    expect(() => computeWeights(0, 'simple')).toThrow(RangeError)
+    expect(() => computeWeights(0, 'weighted')).toThrow(RangeError)
   })
 
-  it('negative N returns empty array', () => {
-    expect(computeWeights(-1, 'weighted')).toEqual([])
+  it('negative N throws RangeError', () => {
+    expect(() => computeWeights(-1, 'weighted')).toThrow(RangeError)
+    expect(() => computeWeights(-5, 'simple')).toThrow(RangeError)
+  })
+
+  it('RangeError message includes the bad value', () => {
+    expect(() => computeWeights(0, 'simple')).toThrow('got 0')
+    expect(() => computeWeights(-3, 'weighted')).toThrow('got -3')
   })
 })

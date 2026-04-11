@@ -9,11 +9,11 @@ export type ForecastModel = 'simple' | 'weighted'
  * 'simple': uniform — all months weighted equally.
  *   w[i] = 1 / N
  *
- * Returns an empty array when n <= 0.
+ * Throws RangeError when n < 1 — passing 0 or negative is a programming error.
  * The returned weights always sum to 1 (within floating-point precision).
  */
 export function computeWeights(n: number, model: ForecastModel): number[] {
-  if (n <= 0) return []
+  if (n < 1) throw new RangeError(`computeWeights: n must be > 0, got ${n}`)
 
   if (model === 'simple') {
     return Array<number>(n).fill(1 / n)

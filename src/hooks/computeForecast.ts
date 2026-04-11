@@ -1,4 +1,26 @@
+/**
+ * computeForecast — pure function (no React, no side-effects).
+ *
+ * Status precedence (highest to lowest):
+ *   loading > error > partialNoHistory > partialNoBills > ok > unavailable
+ *
+ * Status definitions:
+ *   loading         — any query still pending
+ *   error           — mtdQuery failed (MTD is indispensable for the total)
+ *   partialNoHistory — historyMonthsUsed < config.historyMonths
+ *                      (includes the case of 0 months when bills are available)
+ *   partialNoBills  — history complete but billsQuery failed
+ *   ok              — all data available, historyMonthsUsed === config.historyMonths
+ *   unavailable     — historyMonthsUsed === 0 AND billsQuery failed
+ *                     (nothing useful to show beyond a raw MTD number)
+ */
+
 import { computeWeights, type ForecastModel } from '../lib/forecast-weights'
+import type { InsightEntry } from '../api/types'
+import type { Bill } from '../api/bills'
+
+/** Re-exported so callers can reference the same type without touching api/types. */
+export type ExpenseNoBillEntry = InsightEntry
 
 export type ForecastStatus =
   | 'loading'
@@ -8,42 +30,39 @@ export type ForecastStatus =
   | 'partialNoHistory'
   | 'unavailable'
 
-export interface HistoryMonthInput {
-  /** Absolute value of variable expense for the month (positive number). */
-  variableSpend: number
-  /** Total calendar days in that historical month. */
-  daysInMonth: number
+export interface ForecastQueryState<T> {
+  status: 'pending' | 'success' | 'error'
+  data: T | null
 }
 
 export interface PendingBill {
   id: string
   name: string
-  /** Amount in primary currency. */
+  /** Amount in primary currency (pcAmountAvg when available, else amountAvg). */
   amount: number
-  /** Payment date (ISO date string). */
+  /** ISO date string of the upcoming payment. */
   date: string
 }
 
 export interface ComputeForecastInputs {
-  /** Reference date for all date calculations (use real Date.now() in production; inject in tests). */
+  /** Injected for testability — use `new Date()` in production. */
   today: Date
   config: { historyMonths: number; model: ForecastModel }
   primaryCurrency: { code: string; symbol: string; decimalPlaces: number } | null
 
-  /** Query status for each historical month; parallel to historyData. Length = config.historyMonths. */
-  historyStatuses: ('pending' | 'success' | 'error')[]
-  mtdStatus: 'pending' | 'success' | 'error'
-  billsStatus: 'pending' | 'success' | 'error'
-
-  /** One entry per historical month (most recent first). null when that month's query errored. */
-  historyData: (HistoryMonthInput | null)[]
-  /** Already-spent amount this month (from /summary/basic). */
-  mtdSpent: number | null
   /**
-   * Bills with a pay_date in the forecast window.
-   * Pre-filtered by the hook: active=true, pay_date in (today, endOfMonth], pcAmountAvg available.
+   * One entry per historical month, ordered most-recent-first (index 0 = last month).
+   * Length must equal config.historyMonths.
+   * `data.entries` are raw InsightEntry items from /insight/expense/no-bill.
+   * `data.daysInMonth` is the total calendar days of that historical month.
    */
-  pendingBills: PendingBill[]
+  historicalQueries: ForecastQueryState<{ entries: ExpenseNoBillEntry[]; daysInMonth: number }>[]
+
+  /** MTD spend from /summary/basic for the current month. */
+  mtdQuery: ForecastQueryState<{ amount: number; currencyCode: string }>
+
+  /** Bills from /bills?start=tomorrow&end=endOfMonth. */
+  billsQuery: ForecastQueryState<Bill[]>
 }
 
 export interface ForecastResult {
@@ -63,91 +82,75 @@ export interface ForecastResult {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function getDaysInMonth(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()
 }
 
-function loadingResult(): ForecastResult {
-  return {
-    status: 'loading',
-    currency: null,
-    mtdSpent: null,
-    variableForecast: null,
-    billsForecast: null,
-    total: null,
-    breakdown: {
-      daysInMonth: 0,
-      daysElapsed: 0,
-      daysRemaining: 0,
-      weightedAvgDaily: null,
-      historyMonthsUsed: 0,
-      pendingBills: [],
-    },
-  }
+function formatDate(d: Date): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
 }
 
-function unavailableResult(
-  currency: ForecastResult['currency'],
-  dateInfo: { daysInMonth: number; daysElapsed: number; daysRemaining: number }
-): ForecastResult {
-  return {
-    status: 'unavailable',
-    currency,
-    mtdSpent: null,
-    variableForecast: null,
-    billsForecast: null,
-    total: null,
-    breakdown: {
-      ...dateInfo,
-      weightedAvgDaily: null,
-      historyMonthsUsed: 0,
-      pendingBills: [],
-    },
-  }
-}
+// ---------------------------------------------------------------------------
+// Main function
+// ---------------------------------------------------------------------------
 
 export function computeForecast(inputs: ComputeForecastInputs): ForecastResult {
-  const {
-    today,
-    config,
-    primaryCurrency,
-    historyStatuses,
-    mtdStatus,
-    billsStatus,
-    historyData,
-    mtdSpent,
-    pendingBills,
-  } = inputs
+  const { today, config, primaryCurrency, historicalQueries, mtdQuery, billsQuery } = inputs
 
-  // Step 1 — loading: any query still pending
+  // --- Step 1: loading ---
   if (
-    historyStatuses.some((s) => s === 'pending') ||
-    mtdStatus === 'pending' ||
-    billsStatus === 'pending'
+    mtdQuery.status === 'pending' ||
+    billsQuery.status === 'pending' ||
+    historicalQueries.some((q) => q.status === 'pending')
   ) {
-    return loadingResult()
+    return {
+      status: 'loading',
+      currency: null,
+      mtdSpent: null,
+      variableForecast: null,
+      billsForecast: null,
+      total: null,
+      breakdown: {
+        daysInMonth: 0,
+        daysElapsed: 0,
+        daysRemaining: 0,
+        weightedAvgDaily: null,
+        historyMonthsUsed: 0,
+        pendingBills: [],
+      },
+    }
   }
 
-  // Date computations (needed for all non-loading results)
+  // Date computations (valid for all non-loading states)
   const daysInMonth = getDaysInMonth(today)
   const daysElapsed = today.getDate()
-  const daysRemaining = daysInMonth - daysElapsed
+  const daysRemaining = Math.max(0, daysInMonth - daysElapsed)
   const dateInfo = { daysInMonth, daysElapsed, daysRemaining }
 
-  // Step 2 — unavailable: no primary currency configured
+  // --- Step 2: no primary currency → unavailable ---
   if (primaryCurrency === null) {
-    return unavailableResult(null, dateInfo)
+    return {
+      status: 'unavailable',
+      currency: null,
+      mtdSpent: null,
+      variableForecast: null,
+      billsForecast: null,
+      total: null,
+      breakdown: { ...dateInfo, weightedAvgDaily: null, historyMonthsUsed: 0, pendingBills: [] },
+    }
   }
 
   const currency = primaryCurrency
 
-  // Step 3 — unavailable: neither MTD nor bills are available
-  if (mtdStatus === 'error' && billsStatus === 'error') {
-    return unavailableResult(currency, dateInfo)
-  }
-
-  // Step 4 — error: MTD failed (cannot compute "already spent" component)
-  if (mtdStatus === 'error') {
+  // --- Step 3: MTD failed → error ---
+  if (mtdQuery.status === 'error') {
     return {
       status: 'error',
       currency,
@@ -159,86 +162,128 @@ export function computeForecast(inputs: ComputeForecastInputs): ForecastResult {
         ...dateInfo,
         weightedAvgDaily: null,
         historyMonthsUsed: 0,
-        pendingBills: billsStatus === 'success' ? pendingBills : [],
+        pendingBills: billsQuery.status === 'success' ? buildPendingBills(billsQuery.data ?? [], today) : [],
       },
     }
   }
 
-  // Step 5 — compute variable forecast from valid history months
-  const validMonths = historyData.filter((m): m is HistoryMonthInput => m !== null)
-  const historyMonthsUsed = validMonths.length
+  const mtdSpent = mtdQuery.data!.amount
 
+  // --- Step 4: compute valid history months ---
+  const validDailyRates: number[] = []
+  for (const query of historicalQueries) {
+    if (query.status !== 'success' || query.data === null) continue
+    const { entries, daysInMonth: dim } = query.data
+    if (dim <= 0) continue // defensive: skip degenerate month
+    // Sum absolute expense for entries in primary currency
+    const matching = entries.filter((e) => e.currency_code === currency.code)
+    if (matching.length === 0) continue // no data in primary currency — exclude this month
+    const variableSpend = matching.reduce((sum, e) => sum + Math.abs(e.difference_float), 0)
+    validDailyRates.push(variableSpend / dim)
+  }
+
+  const historyMonthsUsed = validDailyRates.length
+
+  // --- Step 5: compute variable forecast ---
   let weightedAvgDaily: number | null = null
   let variableForecast: number | null = null
 
   if (historyMonthsUsed > 0) {
     const weights = computeWeights(historyMonthsUsed, config.model)
-    weightedAvgDaily = validMonths.reduce(
-      (acc, month, i) => acc + weights[i] * (month.variableSpend / month.daysInMonth),
-      0
-    )
+    weightedAvgDaily = validDailyRates.reduce((acc, rate, i) => acc + weights[i] * rate, 0)
     variableForecast = weightedAvgDaily * daysRemaining
   }
 
-  // Step 6 — partialNoHistory: no valid history, but MTD + bills are available
-  if (historyMonthsUsed === 0) {
-    const billsForecast =
-      billsStatus === 'success'
-        ? pendingBills.reduce((sum, b) => sum + b.amount, 0)
-        : null
+  // --- Step 6: compute pending bills ---
+  let pendingBills: PendingBill[] = []
+  let billsForecast: number | null = null
+
+  if (billsQuery.status === 'success' && billsQuery.data !== null) {
+    pendingBills = buildPendingBills(billsQuery.data, today)
+    billsForecast = pendingBills.reduce((sum, b) => sum + b.amount, 0)
+  }
+
+  // --- Step 7: determine final status ---
+  // Precedence: loading > error (handled above) > partialNoHistory > partialNoBills > ok > unavailable
+
+  if (historyMonthsUsed === 0 && billsQuery.status === 'error') {
+    // No history AND no bills — nothing useful beyond the raw MTD
+    return {
+      status: 'unavailable',
+      currency,
+      mtdSpent,
+      variableForecast: null,
+      billsForecast: null,
+      total: mtdSpent,
+      breakdown: { ...dateInfo, weightedAvgDaily: null, historyMonthsUsed: 0, pendingBills: [] },
+    }
+  }
+
+  // total formula: mtd + (variable ?? 0) + (bills ?? 0)
+  const computeTotal = (vf: number | null, bf: number | null): number =>
+    mtdSpent + (vf ?? 0) + (bf ?? 0)
+
+  if (historyMonthsUsed < config.historyMonths) {
+    // partialNoHistory: includes 0-months-with-bills and partial history
     return {
       status: 'partialNoHistory',
       currency,
       mtdSpent,
-      variableForecast: null,
+      variableForecast,
       billsForecast,
-      total: billsForecast !== null && mtdSpent !== null ? mtdSpent + billsForecast : null,
-      breakdown: {
-        ...dateInfo,
-        weightedAvgDaily: null,
-        historyMonthsUsed: 0,
-        pendingBills: billsStatus === 'success' ? pendingBills : [],
-      },
+      total: computeTotal(variableForecast, billsForecast),
+      breakdown: { ...dateInfo, weightedAvgDaily, historyMonthsUsed, pendingBills },
     }
   }
 
-  // Step 7 — partialNoBills: history and MTD ok, but bills query failed
-  if (billsStatus === 'error') {
+  if (billsQuery.status === 'error') {
+    // partialNoBills: full history but bills unavailable
     return {
       status: 'partialNoBills',
       currency,
       mtdSpent,
       variableForecast,
       billsForecast: null,
-      total: mtdSpent !== null && variableForecast !== null ? mtdSpent + variableForecast : null,
-      breakdown: {
-        ...dateInfo,
-        weightedAvgDaily,
-        historyMonthsUsed,
-        pendingBills: [],
-      },
+      total: computeTotal(variableForecast, null),
+      breakdown: { ...dateInfo, weightedAvgDaily, historyMonthsUsed, pendingBills: [] },
     }
   }
 
-  // Step 8 — ok (or ok-with-partial-history, noted in historyMonthsUsed)
-  const billsForecast = pendingBills.reduce((sum, b) => sum + b.amount, 0)
-  const total =
-    mtdSpent !== null && variableForecast !== null
-      ? mtdSpent + variableForecast + billsForecast
-      : null
-
+  // ok
   return {
     status: 'ok',
     currency,
     mtdSpent,
     variableForecast,
     billsForecast,
-    total,
-    breakdown: {
-      ...dateInfo,
-      weightedAvgDaily,
-      historyMonthsUsed,
-      pendingBills,
-    },
+    total: computeTotal(variableForecast, billsForecast),
+    breakdown: { ...dateInfo, weightedAvgDaily, historyMonthsUsed, pendingBills },
   }
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+function buildPendingBills(bills: Bill[], today: Date): PendingBill[] {
+  const todayStr = formatDate(today)
+  const endOfMonthStr = formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 0))
+  const result: PendingBill[] = []
+
+  for (const bill of bills) {
+    if (!bill.active) continue
+    for (const payDate of bill.payDates) {
+      // Include dates strictly after today and up to end-of-month (inclusive)
+      if (payDate <= todayStr) continue
+      if (payDate > endOfMonthStr) continue
+      // Exclude if already paid on that exact date
+      if (bill.paidDates.some((pd) => pd.date === payDate)) continue
+      // Prefer pcAmountAvg (primary currency); fall back to amountAvg if null
+      // (fallback assumes amountAvg is in primary currency — a best-effort approximation)
+      const amount = bill.pcAmountAvg !== null ? bill.pcAmountAvg : bill.amountAvg
+      result.push({ id: bill.id, name: bill.name, amount, date: payDate })
+    }
+  }
+
+  return result
 }
