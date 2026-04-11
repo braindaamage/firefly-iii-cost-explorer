@@ -18,6 +18,10 @@ vi.mock('./ForecastSettingsSection', () => ({
   ForecastSettingsSection: () => null,
 }))
 
+vi.mock('./RatesSidecarSection', () => ({
+  RatesSidecarSection: () => null,
+}))
+
 const mockSaveConfig = vi.fn()
 const mockUseConfig = vi.fn()
 

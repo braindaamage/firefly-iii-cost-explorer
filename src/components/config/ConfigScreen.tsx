@@ -6,6 +6,7 @@ import { maskToken } from '../../lib/mask-token'
 import { ErrorBanner } from '../ui/ErrorBanner'
 import { ConnectionStatus } from './ConnectionStatus'
 import { ForecastSettingsSection } from './ForecastSettingsSection'
+import { RatesSidecarSection } from './RatesSidecarSection'
 import type { ConnectionState } from './ConnectionStatus'
 
 const inputStyle: React.CSSProperties = {
@@ -321,15 +322,26 @@ export function ConfigScreen() {
         </button>
 
         {config && (
-          <div
-            id="forecast"
-            style={{ borderTop: '1px solid #3c4043', paddingTop: '24px' }}
-          >
-            <ForecastSettingsSection
-              baseUrl={config.baseUrl}
-              token={config.apiToken}
-            />
-          </div>
+          <>
+            <div
+              id="forecast"
+              style={{ borderTop: '1px solid #3c4043', paddingTop: '24px' }}
+            >
+              <ForecastSettingsSection
+                baseUrl={config.baseUrl}
+                token={config.apiToken}
+              />
+            </div>
+            <div
+              id="rates-sidecar"
+              style={{ borderTop: '1px solid #3c4043', paddingTop: '24px' }}
+            >
+              <RatesSidecarSection
+                baseUrl={config.baseUrl}
+                token={config.apiToken}
+              />
+            </div>
+          </>
         )}
       </div>
     </div>

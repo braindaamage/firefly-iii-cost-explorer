@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { validateConfig, loadConfig, requiresCronReinstall, DEFAULTS, PREFERENCE_KEY } from '../src/config.js'
+import { validateConfig, loadConfig, requiresCronReinstall, DEFAULTS, PREFERENCE_KEY, RUN_NOW_PREFERENCE_KEY } from '../src/config.js'
 
 const noop = () => {}
 
@@ -102,6 +102,12 @@ describe('loadConfig', () => {
     await loadConfig(client, log)
 
     expect(log).toHaveBeenCalledWith('warn', 'config_validation_warnings', expect.any(Object))
+  })
+})
+
+describe('RUN_NOW_PREFERENCE_KEY', () => {
+  it('exports RUN_NOW_PREFERENCE_KEY with correct value', () => {
+    expect(RUN_NOW_PREFERENCE_KEY).toBe('costExplorer.ratesSidecar.runNow')
   })
 })
 
