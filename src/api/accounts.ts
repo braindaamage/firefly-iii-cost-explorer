@@ -30,8 +30,11 @@ export async function fetchAssetAndLiabilityAccountBalances(
   token: string
 ): Promise<Account[]> {
   const client = createApiClient(baseUrl, token)
-  const raw = await client.fetchAllPages<AccountRaw>('/accounts?type=asset,liability')
-  return raw.map((item) => ({
+  const [assets, liabilities] = await Promise.all([
+    client.fetchAllPages<AccountRaw>('/accounts?type=asset'),
+    client.fetchAllPages<AccountRaw>('/accounts?type=liabilities'),
+  ])
+  return [...assets, ...liabilities].map((item) => ({
     id: item.id,
     name: item.attributes.name,
     active: item.attributes.active,

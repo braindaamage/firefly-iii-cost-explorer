@@ -101,19 +101,31 @@ describe('fetchAssetAndLiabilityAccountBalances', () => {
     },
   }
 
-  it('calls /accounts?type=asset,liability endpoint', async () => {
-    mockFetchOk(mockPaginatedResponse([baseAssetRaw]))
+  function mockFetchOkDouble(assetBody: unknown, liabilityBody: unknown) {
+    vi.stubGlobal('fetch', vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, statusText: 'OK', json: () => Promise.resolve(assetBody) })
+      .mockResolvedValueOnce({ ok: true, status: 200, statusText: 'OK', json: () => Promise.resolve(liabilityBody) })
+    )
+  }
+
+  const emptyPage = mockPaginatedResponse([])
+
+  it('makes parallel calls to type=asset and type=liabilities', async () => {
+    mockFetchOkDouble(mockPaginatedResponse([baseAssetRaw]), emptyPage)
     await fetchAssetAndLiabilityAccountBalances(BASE_URL, TOKEN)
+    expect(vi.mocked(fetch)).toHaveBeenCalledTimes(2)
     expect(vi.mocked(fetch)).toHaveBeenCalledWith(
-      expect.stringContaining('type=asset,liability'),
-      expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }),
-      })
+      expect.stringMatching(/type=asset(&|$)/),
+      expect.objectContaining({ headers: expect.objectContaining({ Authorization: `Bearer ${TOKEN}` }) })
+    )
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      expect.stringContaining('type=liabilities'),
+      expect.anything()
     )
   })
 
   it('maps pc_current_balance string to number', async () => {
-    mockFetchOk(mockPaginatedResponse([baseAssetRaw]))
+    mockFetchOkDouble(mockPaginatedResponse([baseAssetRaw]), emptyPage)
     const result = await fetchAssetAndLiabilityAccountBalances(BASE_URL, TOKEN)
     expect(result[0].pcCurrentBalance).toBe(1000)
   })
@@ -123,7 +135,7 @@ describe('fetchAssetAndLiabilityAccountBalances', () => {
       ...baseAssetRaw,
       attributes: { ...baseAssetRaw.attributes, pc_current_balance: null },
     }
-    mockFetchOk(mockPaginatedResponse([rawWithNullPc]))
+    mockFetchOkDouble(mockPaginatedResponse([rawWithNullPc]), emptyPage)
     const result = await fetchAssetAndLiabilityAccountBalances(BASE_URL, TOKEN)
     expect(result[0].pcCurrentBalance).toBeNull()
   })
@@ -139,7 +151,7 @@ describe('fetchAssetAndLiabilityAccountBalances', () => {
         primary_currency_decimal_places: 2,
       },
     }
-    mockFetchOk(mockPaginatedResponse([rawWithPrimary]))
+    mockFetchOkDouble(mockPaginatedResponse([rawWithPrimary]), emptyPage)
     const result = await fetchAssetAndLiabilityAccountBalances(BASE_URL, TOKEN)
     expect(result[0].primaryCurrencyCode).toBe('USD')
     expect(result[0].primaryCurrencySymbol).toBe('$')
@@ -152,7 +164,7 @@ describe('fetchAssetAndLiabilityAccountBalances', () => {
       attributes: {
         name: 'Credit Card',
         active: true,
-        type: 'liability',
+        type: 'liabilities',
         currency_code: 'EUR',
         currency_symbol: '€',
         currency_decimal_places: 2,
@@ -164,10 +176,10 @@ describe('fetchAssetAndLiabilityAccountBalances', () => {
         primary_currency_decimal_places: 2,
       },
     }
-    mockFetchOk(mockPaginatedResponse([baseAssetRaw, liabilityRaw]))
+    mockFetchOkDouble(mockPaginatedResponse([baseAssetRaw]), mockPaginatedResponse([liabilityRaw]))
     const result = await fetchAssetAndLiabilityAccountBalances(BASE_URL, TOKEN)
     expect(result).toHaveLength(2)
-    expect(result[1].type).toBe('liability')
+    expect(result[1].type).toBe('liabilities')
     expect(result[1].currentBalance).toBe(-500)
     expect(result[1].pcCurrentBalance).toBe(-500)
   })
@@ -178,7 +190,7 @@ describe('fetchAssetAndLiabilityAccountBalances', () => {
       id: '3',
       attributes: { ...baseAssetRaw.attributes, name: 'Old Account', active: false },
     }
-    mockFetchOk(mockPaginatedResponse([baseAssetRaw, inactiveRaw]))
+    mockFetchOkDouble(mockPaginatedResponse([baseAssetRaw, inactiveRaw]), emptyPage)
     const result = await fetchAssetAndLiabilityAccountBalances(BASE_URL, TOKEN)
     expect(result[0].active).toBe(true)
     expect(result[1].active).toBe(false)
