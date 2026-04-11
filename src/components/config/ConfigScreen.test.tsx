@@ -15,14 +15,10 @@ vi.mock('react-router-dom', async () => {
 })
 
 const mockSaveConfig = vi.fn()
+const mockUseConfig = vi.fn()
 
 vi.mock('../../hooks/useConfig', () => ({
-  useConfig: () => ({
-    config: null,
-    saveConfig: mockSaveConfig,
-    clearConfig: vi.fn(),
-    isConfigured: false,
-  }),
+  useConfig: () => mockUseConfig(),
 }))
 
 function mockFetchAbout(version: string) {
@@ -64,6 +60,12 @@ describe('ConfigScreen', () => {
     mockNavigate.mockReset()
     mockSaveConfig.mockReset()
     localStorage.clear()
+    mockUseConfig.mockReturnValue({
+      config: null,
+      saveConfig: mockSaveConfig,
+      clearConfig: vi.fn(),
+      isConfigured: false,
+    })
   })
 
   it('renders empty fields initially', () => {
@@ -282,5 +284,75 @@ describe('ConfigScreen', () => {
     // Connection status reset to idle → success message gone, save disabled
     expect(screen.queryByText('Connected to Firefly III v6.1.21')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /save & continue/i })).toBeDisabled()
+  })
+})
+
+describe('ConfigScreen — rehydration from saved config', () => {
+  const savedConfig = {
+    baseUrl: 'https://firefly.example.com',
+    apiToken: 'my-long-saved-token-8a3f',
+  }
+
+  beforeEach(() => {
+    vi.restoreAllMocks()
+    mockNavigate.mockReset()
+    mockSaveConfig.mockReset()
+    localStorage.clear()
+    mockUseConfig.mockReturnValue({
+      config: savedConfig,
+      saveConfig: mockSaveConfig,
+      clearConfig: vi.fn(),
+      isConfigured: true,
+    })
+  })
+
+  function renderConfigScreen(initialPath = '/config') {
+    return render(
+      <MemoryRouter initialEntries={[initialPath]}>
+        <ConfigScreen />
+      </MemoryRouter>
+    )
+  }
+
+  it('pre-fills Base URL from saved config', () => {
+    renderConfigScreen()
+    expect(screen.getByLabelText('Base URL')).toHaveValue('https://firefly.example.com')
+  })
+
+  it('shows masked token instead of editable input on initial load', () => {
+    renderConfigScreen()
+    expect(screen.getByTestId('token-mask')).toBeInTheDocument()
+    expect(screen.getByTestId('token-mask')).toHaveTextContent('••••••••8a3f')
+    expect(screen.queryByLabelText('API Token')).not.toBeInTheDocument()
+  })
+
+  it('Edit button switches token to editable input pre-filled with saved value', async () => {
+    renderConfigScreen()
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('button', { name: /edit token/i }))
+
+    expect(screen.queryByTestId('token-mask')).not.toBeInTheDocument()
+    const input = screen.getByLabelText('API Token')
+    expect(input).toBeInTheDocument()
+    expect(input).toHaveValue(savedConfig.apiToken)
+  })
+
+  it('Cancel button reverts to masked token display', async () => {
+    renderConfigScreen()
+    const user = userEvent.setup()
+
+    await user.click(screen.getByRole('button', { name: /edit token/i }))
+    expect(screen.getByLabelText('API Token')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /cancel edit token/i }))
+
+    expect(screen.getByTestId('token-mask')).toBeInTheDocument()
+    expect(screen.queryByLabelText('API Token')).not.toBeInTheDocument()
+  })
+
+  it('Test Connection is enabled immediately (both fields have values from config)', () => {
+    renderConfigScreen()
+    expect(screen.getByRole('button', { name: /test connection/i })).not.toBeDisabled()
   })
 })
