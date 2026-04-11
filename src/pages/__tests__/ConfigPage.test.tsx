@@ -23,7 +23,7 @@ describe('ConfigPage — scroll-to-hash', () => {
   afterEach(() => {
     vi.useRealTimers()
     // Clean up scrollIntoView mock if set
-    delete (HTMLElement.prototype as Record<string, unknown>).scrollIntoView
+    delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollIntoView
   })
 
   it('scrolls to the anchor element matching the URL hash', async () => {
