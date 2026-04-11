@@ -355,4 +355,23 @@ describe('ConfigScreen — rehydration from saved config', () => {
     renderConfigScreen()
     expect(screen.getByRole('button', { name: /test connection/i })).not.toBeDisabled()
   })
+
+  it('saving without editing preserves the token from saved config', async () => {
+    mockFetchAbout('6.1.21')
+    renderConfigScreen()
+    const user = userEvent.setup()
+
+    // Test connection without entering Edit mode — token stays as masked display
+    await user.click(screen.getByRole('button', { name: /test connection/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /save & continue/i })).not.toBeDisabled()
+    })
+
+    await user.click(screen.getByRole('button', { name: /save & continue/i }))
+
+    expect(mockSaveConfig).toHaveBeenCalledWith({
+      baseUrl: savedConfig.baseUrl,
+      apiToken: savedConfig.apiToken,
+    })
+  })
 })

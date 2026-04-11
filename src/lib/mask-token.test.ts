@@ -6,10 +6,10 @@ describe('maskToken', () => {
     expect(maskToken('my-secret-token-8a3f')).toBe('••••••••8a3f')
   })
 
-  it('returns the token as-is when it is 4 chars or shorter', () => {
-    expect(maskToken('ab3f')).toBe('ab3f')
-    expect(maskToken('abc')).toBe('abc')
-    expect(maskToken('')).toBe('')
+  it('returns 8 bullets when the token is 4 chars or shorter', () => {
+    expect(maskToken('ab3f')).toBe('••••••••')
+    expect(maskToken('abc')).toBe('••••••••')
+    expect(maskToken('')).toBe('••••••••')
   })
 
   it('always shows exactly the last 4 chars regardless of token length', () => {

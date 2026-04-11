@@ -172,7 +172,6 @@ export function ConfigScreen() {
           {!editingToken ? (
             <div style={{ position: 'relative' }}>
               <div
-                id="api-token"
                 data-testid="token-mask"
                 aria-label="Current API token (masked)"
                 style={{
