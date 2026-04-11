@@ -1,0 +1,9 @@
+.env
+.env.local
+node_modules
+test
+coverage
+*.log
+*.md
+.git
+.gitignore
