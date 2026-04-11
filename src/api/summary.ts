@@ -5,9 +5,12 @@ export interface SummaryBasicResult {
   currencyCode: string  // same as the input currencyCode param
 }
 
-// NOTE: /summary/basic returns a flat object keyed by "spent-in-EUR", "balance-in-EUR", etc.
-// Each value has monetary_value as a string (e.g. "-80.000000000000" or "0").
-// There is no "data" wrapper — verified empirically against Firefly III 6.5.9 on 2026-04-11.
+// NOTE: /summary/basic returns a flat object (no "data" wrapper) keyed by
+// "spent-in-EUR", "balance-in-EUR", etc. Each value has monetary_value as a
+// signed string (e.g. "-5.000000000000" for expenses, "0" when none).
+// Verified empirically against Firefly III 6.5.9 on 2026-04-11:
+//   curl ".../api/v1/summary/basic?start=2026-04-01&end=2026-04-30" → top-level keys,
+//   "spent-in-EUR": { monetary_value: "-5.000000000000", currency_code: "EUR", ... }
 type SummaryEntry = {
   key: string
   monetary_value: string

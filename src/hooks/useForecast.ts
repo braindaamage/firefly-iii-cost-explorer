@@ -80,7 +80,14 @@ export function useForecast(
     enabled,
   })
 
+  // Single string dep for history results: stable length regardless of historyMonths.
+  // Encodes status + dataUpdatedAt so any data/status change triggers recomputation.
+  const historyFingerprint = historyResults
+    .map((rq) => `${rq.status}:${rq.dataUpdatedAt ?? 0}`)
+    .join('|')
+
   // --- Assemble ComputeForecastInputs and run pure computation ---
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   return useMemo(
     () =>
       computeForecast({
@@ -110,17 +117,11 @@ export function useForecast(
           data: billsQuery.data ?? null,
         },
       }),
-    // Granular deps to avoid unnecessary recomputation
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       today,
       configResult.config,
       primary,
-      // Flatten historyResults to granular deps so a change in one query
-      // doesn't create a new array reference that triggers recomputation
-      // when other queries are unchanged
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-      ...historyResults.flatMap((rq) => [rq.status, rq.data]),
+      historyFingerprint,
       mtdQuery.status,
       mtdQuery.data,
       billsQuery.status,

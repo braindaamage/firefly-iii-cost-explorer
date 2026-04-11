@@ -320,6 +320,48 @@ describe('useForecast', () => {
     await waitFor(() => expect(vi.mocked(fetchExpenseNoBill)).toHaveBeenCalledTimes(6))
   })
 
+  it('changing historyMonths from 3 to 6 mid-mount re-computes with 6 historicalQueries', async () => {
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await setupConfigMock({ historyMonths: 3, model: 'weighted' })
+    const { fetchCurrencies } = await import('../api/currencies')
+    vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
+    const { fetchExpenseNoBill } = await import('../api/insights')
+    vi.mocked(fetchExpenseNoBill).mockResolvedValue(makeHistoryEntries(300))
+    const { fetchSummaryBasic } = await import('../api/summary')
+    vi.mocked(fetchSummaryBasic).mockResolvedValue(MOCK_MTD)
+    const { fetchBills } = await import('../api/bills')
+    vi.mocked(fetchBills).mockResolvedValue(MOCK_BILLS)
+
+    const { result, rerender } = renderHook(() => useForecast(BASE_URL, TOKEN, TODAY), {
+      wrapper: makeWrapper(),
+    })
+    await waitFor(() => expect(result.current.status).toBe('ok'))
+
+    // Change historyMonths to 6 mid-mount
+    const mod = await getUseForecastConfig()
+    vi.mocked(mod).mockReturnValue({
+      config: { historyMonths: 6, model: 'weighted' },
+      status: 'success',
+      source: 'default',
+      updateConfig: vi.fn(),
+      retryRemote: vi.fn(),
+    })
+    rerender()
+
+    // 3 additional months fire (6 total calls across lifetime of the hook)
+    await waitFor(() =>
+      expect(vi.mocked(fetchExpenseNoBill).mock.calls.length).toBeGreaterThanOrEqual(6)
+    )
+
+    // No React hook-rule violations emitted
+    expect(consoleErrorSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining('changed size')
+    )
+
+    consoleErrorSpy.mockRestore()
+  })
+
   it('computeForecast is not called excessively on stable inputs', async () => {
     await setupConfigMock()
     const { fetchCurrencies } = await import('../api/currencies')
