@@ -66,7 +66,7 @@ function GearButton({ onClick }: { onClick: () => void }) {
         alignItems: 'center',
       }}
     >
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
         <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58
           c0.18-0.14,0.23-0.41,0.12-0.61l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96
           c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41h-3.84
@@ -162,7 +162,7 @@ export function ForecastCard({ forecast, config, onOpenSettings }: ForecastCardP
         </div>
         {mtdSpent !== null && currency && (
           <div
-            data-testid="forecast-mtd"
+            data-testid="forecast-mtd-fallback"
             style={{ color: '#9aa0a6', fontSize: '14px', fontFamily: "'Roboto', sans-serif" }}
           >
             Spent so far: {formatCurrency(mtdSpent, currency.code, currency.decimalPlaces)}

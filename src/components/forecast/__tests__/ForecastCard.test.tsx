@@ -166,10 +166,10 @@ describe('ForecastCard', () => {
     expect(screen.getByTestId('forecast-unavailable')).toBeInTheDocument()
   })
 
-  it('unavailable state shows mtdSpent when available', () => {
+  it('unavailable state shows mtdSpent fallback when available', () => {
     renderCard(UNAVAILABLE_WITH_MTD)
-    expect(screen.getByTestId('forecast-mtd')).toBeInTheDocument()
-    expect(screen.getByTestId('forecast-mtd').textContent).toMatch(/500/)
+    expect(screen.getByTestId('forecast-mtd-fallback')).toBeInTheDocument()
+    expect(screen.getByTestId('forecast-mtd-fallback').textContent).toMatch(/500/)
   })
 
   it('renders error state with alert role', () => {
