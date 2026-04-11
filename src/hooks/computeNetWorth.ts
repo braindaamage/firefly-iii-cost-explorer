@@ -26,12 +26,10 @@ export interface NetWorthResult {
   fallbackPerCurrency: { currencyCode: string; symbol: string; total: number }[]
 }
 
-export interface RateResult {
-  from: string
-  to: string
+// Fix 1: RateQueryState replaces the old RateResult — data is nested, no from/to needed
+export interface RateQueryState {
   status: 'pending' | 'success' | 'error'
-  rate: number | null
-  rateDate?: string
+  data: { rate: number; date: string } | null
 }
 
 export interface ComputeNetWorthInputs {
@@ -39,7 +37,7 @@ export interface ComputeNetWorthInputs {
   currencies: Currency[]
   primary: Currency | undefined
   secondaries: Currency[]
-  rateResults: RateResult[]
+  rateQueries: RateQueryState[]
   accountsStatus: 'pending' | 'success' | 'error'
   currenciesStatus: 'pending' | 'success' | 'error'
 }
@@ -74,15 +72,13 @@ function buildFallbackPerCurrency(
       map.set(acc.currencyCode, { symbol: acc.currencySymbol, total: acc.currentBalance })
     }
   }
-  return Array.from(map.entries()).map(([currencyCode, { symbol, total }]) => ({
-    currencyCode,
-    symbol,
-    total,
-  }))
+  return Array.from(map.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([currencyCode, { symbol, total }]) => ({ currencyCode, symbol, total }))
 }
 
 export function computeNetWorth(inputs: ComputeNetWorthInputs): NetWorthResult {
-  const { accounts, primary, secondaries, rateResults, accountsStatus, currenciesStatus } = inputs
+  const { accounts, primary, secondaries, rateQueries, accountsStatus, currenciesStatus } = inputs
 
   // Step 1: loading state for main queries
   if (accountsStatus === 'pending' || currenciesStatus === 'pending') {
@@ -94,27 +90,40 @@ export function computeNetWorth(inputs: ComputeNetWorthInputs): NetWorthResult {
     return ERROR_RESULT
   }
 
-  // Step 3: filter inactive accounts (spec §8.6)
-  const activeAccounts = accounts.filter((a) => a.active)
-
-  // Step 4: no active accounts or no primary defined → unavailable (spec §8.2)
-  if (activeAccounts.length === 0 || primary === undefined) {
+  // Step 3: no primary defined → unavailable (spec §8.2)
+  if (primary === undefined) {
     return {
       status: 'unavailable',
       primaryTotal: null,
-      primaryCurrency: primary
-        ? { code: primary.code, symbol: primary.symbol, decimalPlaces: primary.decimalPlaces }
-        : null,
+      primaryCurrency: null,
       secondaries: [],
       excludedAccounts: [],
       fallbackPerCurrency: [],
     }
   }
 
-  // Step 5: partition accounts by presence of pc_current_balance
-  // pcCurrentBalance === 0 counts as present (spec §8.7)
-  const withPc = activeAccounts.filter((a) => a.pcCurrentBalance !== null)
-  const withoutPc = activeAccounts.filter((a) => a.pcCurrentBalance === null)
+  // Step 4: filter inactive accounts (spec §8.6)
+  const activeAccounts = accounts.filter((a) => a.active)
+
+  if (activeAccounts.length === 0) {
+    return {
+      status: 'unavailable',
+      primaryTotal: null,
+      primaryCurrency: { code: primary.code, symbol: primary.symbol, decimalPlaces: primary.decimalPlaces },
+      secondaries: [],
+      excludedAccounts: [],
+      fallbackPerCurrency: [],
+    }
+  }
+
+  // Fix 2: edge case §8.7 — account with currentBalance === 0 and pcCurrentBalance === null
+  // is treated as having pcCurrentBalance = 0 (not excluded, contributes 0 to total)
+  const normalized = activeAccounts.map((acc) => {
+    if (acc.pcCurrentBalance === null && acc.currentBalance === 0) {
+      return { ...acc, pcCurrentBalance: 0 as number }
+    }
+    return acc
+  })
 
   const primaryCurrency = {
     code: primary.code,
@@ -122,7 +131,11 @@ export function computeNetWorth(inputs: ComputeNetWorthInputs): NetWorthResult {
     decimalPlaces: primary.decimalPlaces,
   }
 
-  // Step 6: all accounts without pc → feature unavailable, show fallback per-currency
+  // Step 5: partition normalized accounts by presence of pcCurrentBalance
+  const withPc = normalized.filter((a) => a.pcCurrentBalance !== null)
+  const withoutPc = normalized.filter((a) => a.pcCurrentBalance === null)
+
+  // Step 6: all without pc → feature unavailable, show fallback per-currency
   if (withPc.length === 0) {
     return {
       status: 'unavailable',
@@ -143,19 +156,35 @@ export function computeNetWorth(inputs: ComputeNetWorthInputs): NetWorthResult {
     currencyCode: a.currencyCode,
   }))
 
-  // Step 9: build secondaries from rateResults (arrays are parallel)
+  // Step 9: build secondaries from rateQueries (arrays are parallel)
   const secondaryValues: NetWorthConvertedValue[] = []
   let anySecondaryMissing = false
 
   for (let i = 0; i < secondaries.length; i++) {
     const sec = secondaries[i]
-    const rateResult = rateResults[i]
+    const rateQuery = rateQueries[i]
 
-    if (!rateResult || rateResult.status === 'pending') {
+    if (!rateQuery || rateQuery.status === 'pending') {
       return LOADING_RESULT
     }
 
-    if (rateResult.status === 'error' || rateResult.rate === null) {
+    // Fix 3: defense in depth — validate rate > 0 and finite in the pure function itself
+    const rateData = rateQuery.data
+    const validRate =
+      rateQuery.status === 'success' &&
+      rateData !== null &&
+      isFinite(rateData.rate) &&
+      rateData.rate > 0
+
+    if (validRate && rateData !== null) {
+      secondaryValues.push({
+        currencyCode: sec.code,
+        currencySymbol: sec.symbol,
+        currencyDecimalPlaces: sec.decimalPlaces,
+        value: primaryTotal * rateData.rate,
+        rateDate: rateData.date,
+      })
+    } else {
       secondaryValues.push({
         currencyCode: sec.code,
         currencySymbol: sec.symbol,
@@ -163,14 +192,6 @@ export function computeNetWorth(inputs: ComputeNetWorthInputs): NetWorthResult {
         value: null,
       })
       anySecondaryMissing = true
-    } else {
-      secondaryValues.push({
-        currencyCode: sec.code,
-        currencySymbol: sec.symbol,
-        currencyDecimalPlaces: sec.decimalPlaces,
-        value: primaryTotal * rateResult.rate,
-        rateDate: rateResult.rateDate,
-      })
     }
   }
 

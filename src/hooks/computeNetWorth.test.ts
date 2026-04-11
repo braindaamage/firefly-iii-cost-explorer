@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { computeNetWorth } from './computeNetWorth'
-import type { ComputeNetWorthInputs, RateResult } from './computeNetWorth'
+import type { ComputeNetWorthInputs, RateQueryState } from './computeNetWorth'
 import type { Account } from '../api/accounts'
 import type { Currency } from '../api/currencies'
 
@@ -36,13 +36,11 @@ const CLP: Currency = {
   id: '3', code: 'CLP', name: 'Chilean Peso', symbol: 'CLP', decimalPlaces: 0, enabled: true, isPrimary: false,
 }
 
-function makeRate(overrides: Partial<RateResult> = {}): RateResult {
+// Fix 1: helper now builds RateQueryState (data nested), no from/to
+function makeRateQuery(overrides: Partial<RateQueryState> = {}): RateQueryState {
   return {
-    from: 'EUR',
-    to: 'USD',
     status: 'success',
-    rate: 1.1,
-    rateDate: '2024-03-15',
+    data: { rate: 1.1, date: '2024-03-15' },
     ...overrides,
   }
 }
@@ -53,7 +51,7 @@ function baseInputs(overrides: Partial<ComputeNetWorthInputs> = {}): ComputeNetW
     currencies: [EUR],
     primary: EUR,
     secondaries: [],
-    rateResults: [],
+    rateQueries: [],
     accountsStatus: 'success',
     currenciesStatus: 'success',
     ...overrides,
@@ -68,12 +66,12 @@ describe('computeNetWorth', () => {
       makeAccount({ id: '1', pcCurrentBalance: 1000 }),
       makeAccount({ id: '2', pcCurrentBalance: 500 }),
     ]
-    const rateResults = [makeRate({ to: 'USD', rate: 1.1 })]
+    const rateQueries = [makeRateQuery({ data: { rate: 1.1, date: '2024-03-15' } })]
 
     const result = computeNetWorth(baseInputs({
       accounts,
       secondaries: [USD],
-      rateResults,
+      rateQueries,
     }))
 
     expect(result.status).toBe('ok')
@@ -82,6 +80,7 @@ describe('computeNetWorth', () => {
     expect(result.secondaries).toHaveLength(1)
     expect(result.secondaries[0].value).toBeCloseTo(1650)
     expect(result.secondaries[0].currencyCode).toBe('USD')
+    expect(result.secondaries[0].rateDate).toBe('2024-03-15')
     expect(result.excludedAccounts).toHaveLength(0)
     expect(result.fallbackPerCurrency).toHaveLength(0)
   })
@@ -124,15 +123,15 @@ describe('computeNetWorth', () => {
 
   it('computeNetWorth_allRatesMissing_returnsPartialSecondaryNoSubline', () => {
     const accounts = [makeAccount({ pcCurrentBalance: 1000 })]
-    const rateResults = [
-      makeRate({ to: 'USD', status: 'success', rate: null }),
-      makeRate({ to: 'CLP', status: 'success', rate: null }),
+    const rateQueries = [
+      makeRateQuery({ status: 'success', data: null }),
+      makeRateQuery({ status: 'success', data: null }),
     ]
 
     const result = computeNetWorth(baseInputs({
       accounts,
       secondaries: [USD, CLP],
-      rateResults,
+      rateQueries,
     }))
 
     expect(result.status).toBe('partialSecondary')
@@ -143,15 +142,15 @@ describe('computeNetWorth', () => {
 
   it('computeNetWorth_someRatesMissing_returnsPartialSecondaryWithChip', () => {
     const accounts = [makeAccount({ pcCurrentBalance: 1000 })]
-    const rateResults = [
-      makeRate({ to: 'USD', status: 'success', rate: 1.1 }),
-      makeRate({ to: 'CLP', status: 'success', rate: null }),
+    const rateQueries = [
+      makeRateQuery({ data: { rate: 1.1, date: '2024-03-15' } }),
+      makeRateQuery({ status: 'success', data: null }),
     ]
 
     const result = computeNetWorth(baseInputs({
       accounts,
       secondaries: [USD, CLP],
-      rateResults,
+      rateQueries,
     }))
 
     expect(result.status).toBe('partialSecondary')
@@ -179,12 +178,12 @@ describe('computeNetWorth', () => {
     const withCurrenciesPending = computeNetWorth(baseInputs({ currenciesStatus: 'pending' }))
     expect(withCurrenciesPending.status).toBe('loading')
 
-    // Rate query pending should also return loading
-    const rateResults = [makeRate({ to: 'USD', status: 'pending', rate: null })]
+    // Rate query pending also triggers loading
+    const rateQueries: RateQueryState[] = [{ status: 'pending', data: null }]
     const withRatePending = computeNetWorth(baseInputs({
       accounts: [makeAccount({ pcCurrentBalance: 1000 })],
       secondaries: [USD],
-      rateResults,
+      rateQueries,
     }))
     expect(withRatePending.status).toBe('loading')
   })
@@ -210,21 +209,21 @@ describe('computeNetWorth', () => {
     const result = computeNetWorth(baseInputs({ accounts }))
 
     expect(result.status).toBe('ok')
-    // Inactive account's balance should NOT be included
+    // Inactive balance is silently ignored (not in excludedAccounts)
     expect(result.primaryTotal).toBe(1000)
-    // Inactive account is not in excludedAccounts either — it's silently filtered
     expect(result.excludedAccounts).toHaveLength(0)
   })
 
   it('computeNetWorth_rateZero_treatedAsMissing', () => {
-    // fetchLatestExchangeRate already returns null for rate=0 (Fase 1 handles this).
-    // Here we test that computeNetWorth treats rate=null as missing.
-    const rateResults = [makeRate({ to: 'USD', status: 'success', rate: null })]
+    // Fix 3: computeNetWorth checks rate > 0 internally — rate=0 in data → value null
+    const rateQueries: RateQueryState[] = [
+      { status: 'success', data: { rate: 0, date: '2024-03-15' } },
+    ]
 
     const result = computeNetWorth(baseInputs({
       accounts: [makeAccount({ pcCurrentBalance: 1000 })],
       secondaries: [USD],
-      rateResults,
+      rateQueries,
     }))
 
     expect(result.status).toBe('partialSecondary')
@@ -232,11 +231,10 @@ describe('computeNetWorth', () => {
   })
 
   it('computeNetWorth_singleCurrency_noSubline', () => {
-    // User has only one active currency (the primary), no secondaries
     const result = computeNetWorth(baseInputs({
       accounts: [makeAccount({ pcCurrentBalance: 1000 })],
       secondaries: [],
-      rateResults: [],
+      rateQueries: [],
     }))
 
     expect(result.status).toBe('ok')
@@ -268,16 +266,17 @@ describe('computeNetWorth', () => {
   })
 
   it('computeNetWorth_pcBalanceZero_includedNotExcluded', () => {
-    // Account with pcCurrentBalance = 0 must NOT appear in excludedAccounts (spec §8.7)
+    // Fix 2: account with currentBalance=0 and pcCurrentBalance=null (spec §8.7)
+    // must NOT appear in excludedAccounts and must NOT make status 'partial'
     const accounts = [
-      makeAccount({ id: '1', name: 'Zero Balance', currentBalance: 0, pcCurrentBalance: 0 }),
+      makeAccount({ id: '1', name: 'Zero Balance', currentBalance: 0, pcCurrentBalance: null }),
       makeAccount({ id: '2', name: 'Savings', pcCurrentBalance: 500 }),
     ]
 
     const result = computeNetWorth(baseInputs({ accounts }))
 
-    expect(result.status).toBe('ok')
+    expect(result.status).toBe('ok')           // not 'partial'
     expect(result.excludedAccounts).toHaveLength(0)
-    expect(result.primaryTotal).toBe(500) // 0 + 500
+    expect(result.primaryTotal).toBe(500)      // 0 + 500
   })
 })

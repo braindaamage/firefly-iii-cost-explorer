@@ -4,20 +4,21 @@ import { fetchAssetAndLiabilityAccountBalances } from '../api/accounts'
 import { fetchCurrencies, findPrimary, findEnabledSecondaries } from '../api/currencies'
 import { fetchLatestExchangeRate } from '../api/exchangeRates'
 import { computeNetWorth } from './computeNetWorth'
-import type { NetWorthResult, RateResult } from './computeNetWorth'
+import type { NetWorthResult } from './computeNetWorth'
 
 export function useNetWorth(baseUrl: string, token: string): NetWorthResult {
   const enabled = !!baseUrl && !!token
 
   const accountsQuery = useQuery({
-    queryKey: ['accounts', 'asset,liability', baseUrl, token],
+    // Fix 4: token excluded from queryKey (visible in DevTools; invalidated on login cycle)
+    queryKey: ['accounts', 'asset,liability', baseUrl],
     queryFn: () => fetchAssetAndLiabilityAccountBalances(baseUrl, token),
     staleTime: 60_000,
     enabled,
   })
 
   const currenciesQuery = useQuery({
-    queryKey: ['currencies', baseUrl, token],
+    queryKey: ['currencies', baseUrl],
     queryFn: () => fetchCurrencies(baseUrl, token),
     staleTime: 60 * 60_000,
     enabled,
@@ -30,49 +31,37 @@ export function useNetWorth(baseUrl: string, token: string): NetWorthResult {
 
   const rateQueryResults = useQueries({
     queries: secondaries.map((sec) => ({
-      queryKey: ['exchangeRate', primary?.code ?? '', sec.code, baseUrl, token],
+      // Fix 4: baseUrl first, then currency codes; no token in key
+      queryKey: ['exchangeRate', baseUrl, primary?.code ?? '', sec.code],
       queryFn: () => fetchLatestExchangeRate(baseUrl, token, primary!.code, sec.code),
       enabled: enabled && !!primary && !!sec.code,
       staleTime: 15 * 60_000,
     })),
   })
 
-  return useMemo(() => {
-    const accounts = accountsQuery.data ?? []
-
-    const accountsStatus = accountsQuery.isPending ? 'pending' : accountsQuery.isError ? 'error' : 'success'
-    const currenciesStatus = currenciesQuery.isPending ? 'pending' : currenciesQuery.isError ? 'error' : 'success'
-
-    const rateResults: RateResult[] = secondaries.map((sec, i) => {
-      const result = rateQueryResults[i]
-      return {
-        from: primary?.code ?? '',
-        to: sec.code,
-        status: result.isPending ? 'pending' : result.isError ? 'error' : 'success',
-        rate: result.data?.rate ?? null,
-        rateDate: result.data?.date,
-      }
-    })
-
-    return computeNetWorth({
-      accounts,
+  return useMemo(
+    () =>
+      computeNetWorth({
+        accountsStatus: accountsQuery.status,
+        currenciesStatus: currenciesQuery.status,
+        accounts: accountsQuery.data ?? [],
+        currencies,
+        primary,
+        secondaries,
+        // Fix 1: map to RateQueryState shape (data nested, no from/to)
+        rateQueries: rateQueryResults.map((rq) => ({
+          status: rq.status,
+          data: rq.data ? { rate: rq.data.rate, date: rq.data.date } : null,
+        })),
+      }),
+    [
+      accountsQuery.status,
+      accountsQuery.data,
+      currenciesQuery.status,
       currencies,
       primary,
       secondaries,
-      rateResults,
-      accountsStatus,
-      currenciesStatus,
-    })
-  }, [
-    accountsQuery.data,
-    accountsQuery.isPending,
-    accountsQuery.isError,
-    currenciesQuery.data,
-    currenciesQuery.isPending,
-    currenciesQuery.isError,
-    currencies,
-    primary,
-    secondaries,
-    rateQueryResults,
-  ])
+      rateQueryResults,
+    ]
+  )
 }
