@@ -41,7 +41,7 @@ export function DashboardPage() {
 
   const { data: accountsData } = useQuery({
     // Shared cache key with useNetWorth — TanStack Query deduplicates to one request
-    queryKey: ['accounts', 'asset,liability', config?.baseUrl],
+    queryKey: ['accounts', 'balances', config?.baseUrl],
     queryFn: () => fetchAssetAndLiabilityAccountBalances(config!.baseUrl, config!.apiToken),
     enabled: !!config,
     staleTime: 60_000,

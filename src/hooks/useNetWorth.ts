@@ -11,7 +11,7 @@ export function useNetWorth(baseUrl: string, token: string): NetWorthResult {
 
   const accountsQuery = useQuery({
     // Fix 4: token excluded from queryKey (visible in DevTools; invalidated on login cycle)
-    queryKey: ['accounts', 'asset,liability', baseUrl],
+    queryKey: ['accounts', 'balances', baseUrl],
     queryFn: () => fetchAssetAndLiabilityAccountBalances(baseUrl, token),
     staleTime: 60_000,
     enabled,
