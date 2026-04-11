@@ -55,6 +55,20 @@ export async function runJob(config, client, log) {
     }
     log('info', 'currencies_determined', { count: currencies.length, currencies })
 
+    if (currencies.length === 0) {
+      log('warn', 'no_target_currencies', { currencyMode: config.currencyMode, baseCurrency: config.baseCurrency })
+      await client.writeLastRun({
+        timestamp: new Date().toISOString(),
+        status: 'success',
+        source: 'none',
+        currenciesUpdated: [],
+        currenciesFailed: [],
+        error: null,
+        nextRunEstimated: computeNextRun(config.cronSchedule),
+      })
+      return
+    }
+
     // 2. Fetch rates from primary (+ fallback if needed)
     const { rates: allRates, source, usedFallback } = await fetchRates(config, log)
 
@@ -131,7 +145,7 @@ function installCronJob(schedule, jobFn, log) {
 
 // --- Main startup (runs only when executed as the main module) ---
 export async function start(client, log) {
-  log('info', 'sidecar_startup', { firely_url: FIREFLY_URL })
+  log('info', 'sidecar_startup', { firefly_url: FIREFLY_URL })
 
   let config = await loadConfig(client, log)
   let currentJob = null

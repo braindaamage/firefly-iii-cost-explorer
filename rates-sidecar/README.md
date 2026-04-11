@@ -78,3 +78,9 @@ cd rates-sidecar
 npm install
 npm test
 ```
+
+## Known limitations
+
+- `currencyMode: "active"` fetches up to 200 active currencies from Firefly III in
+  a single page. Users with >200 active currencies should use `currencyMode: "explicit"`
+  and list currencies manually in the `costExplorer.ratesSidecar` preference.
