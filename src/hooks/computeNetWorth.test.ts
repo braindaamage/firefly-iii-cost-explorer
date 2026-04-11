@@ -299,6 +299,54 @@ describe('computeNetWorth', () => {
     expect(result.primaryTotal).toBe(500)      // 0 + 500
   })
 
+  it('computeNetWorth_netByCurrency_populatedInOkState', () => {
+    const accounts = [
+      makeAccount({ id: '1', currencyCode: 'EUR', currencySymbol: '€', currencyDecimalPlaces: 2, currentBalance: 1000, pcCurrentBalance: 1000 }),
+      makeAccount({ id: '2', currencyCode: 'USD', currencySymbol: '$', currencyDecimalPlaces: 2, currentBalance: 500, pcCurrentBalance: 450 }),
+      makeAccount({ id: '3', currencyCode: 'CLP', currencySymbol: 'CLP', currencyDecimalPlaces: 0, currentBalance: 200000, pcCurrentBalance: 180 }),
+    ]
+    const result = computeNetWorth(baseInputs({ accounts }))
+
+    expect(result.status).toBe('ok')
+    expect(result.netByCurrency).toHaveLength(3)
+    expect(result.netByCurrency.map((e) => e.currencyCode)).toEqual(['CLP', 'EUR', 'USD'])
+    expect(result.netByCurrency.find((e) => e.currencyCode === 'EUR')?.total).toBe(1000)
+    expect(result.netByCurrency.find((e) => e.currencyCode === 'USD')?.total).toBe(500)
+    expect(result.netByCurrency.find((e) => e.currencyCode === 'CLP')?.total).toBe(200000)
+    expect(result.netByCurrency.find((e) => e.currencyCode === 'CLP')?.decimalPlaces).toBe(0)
+  })
+
+  it('computeNetWorth_netByCurrency_excludesInactiveAccounts', () => {
+    const accounts = [
+      makeAccount({ id: '1', name: 'Active', active: true, currentBalance: 3000, pcCurrentBalance: 3000 }),
+      makeAccount({ id: '2', name: 'Inactive', active: false, currentBalance: 9999, pcCurrentBalance: 9999 }),
+    ]
+    const result = computeNetWorth(baseInputs({ accounts }))
+
+    expect(result.status).toBe('ok')
+    expect(result.netByCurrency).toHaveLength(1)
+    expect(result.netByCurrency[0].total).toBe(3000)
+  })
+
+  it('computeNetWorth_netByCurrency_sortedAlphabetically', () => {
+    const accounts = [
+      makeAccount({ id: '1', currencyCode: 'USD', currencySymbol: '$', currentBalance: 100, pcCurrentBalance: 100 }),
+      makeAccount({ id: '2', currencyCode: 'EUR', currencySymbol: '€', currentBalance: 200, pcCurrentBalance: 200 }),
+      makeAccount({ id: '3', currencyCode: 'CLP', currencySymbol: 'CLP', currentBalance: 300, pcCurrentBalance: 300 }),
+    ]
+    const result = computeNetWorth(baseInputs({ accounts }))
+
+    expect(result.netByCurrency.map((e) => e.currencyCode)).toEqual(['CLP', 'EUR', 'USD'])
+  })
+
+  it('computeNetWorth_netByCurrency_emptyInLoadingAndError', () => {
+    const loading = computeNetWorth(baseInputs({ accountsStatus: 'pending' }))
+    expect(loading.netByCurrency).toEqual([])
+
+    const error = computeNetWorth(baseInputs({ accountsStatus: 'error' }))
+    expect(error.netByCurrency).toEqual([])
+  })
+
   // Fix 6: primary === undefined with active accounts → unavailable with populated fallback (spec §8.2)
   it('computeNetWorth_primaryUndefined_returnsUnavailableWithPopulatedFallback', () => {
     const accounts = [
