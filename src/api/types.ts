@@ -33,11 +33,17 @@ export interface AccountRaw {
   id: string
   attributes: {
     name: string
+    active: boolean
     type: string
     currency_code: string
     currency_symbol: string
     currency_decimal_places: number
     current_balance: string
+    pc_current_balance: string | null
+    primary_currency_id: string
+    primary_currency_code: string
+    primary_currency_symbol: string
+    primary_currency_decimal_places: number
   }
 }
 
