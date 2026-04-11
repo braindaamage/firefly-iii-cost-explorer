@@ -1,8 +1,5 @@
 import { useMemo } from 'react'
-import { useQuery } from '@tanstack/react-query'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
-import { useNetWorth } from '../../hooks/useNetWorth'
-import { fetchAssetAndLiabilityAccountBalances } from '../../api/accounts'
 import { formatCurrency } from '../../lib/format-currency'
 import type { Account } from '../../api/accounts'
 import type { NetWorthResult, NetWorthConvertedValue } from '../../hooks/computeNetWorth'
@@ -10,8 +7,8 @@ import type { NetWorthResult, NetWorthConvertedValue } from '../../hooks/compute
 type Breakpoint = 'mobile' | 'tablet' | 'desktop'
 
 interface AccountBalancePanelProps {
-  baseUrl: string
-  token: string
+  netWorth: NetWorthResult
+  accounts: Account[]
 }
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
@@ -315,23 +312,13 @@ function WarningChipsRow({ netWorth }: { netWorth: NetWorthResult }) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function AccountBalancePanel({ baseUrl, token }: AccountBalancePanelProps) {
+export function AccountBalancePanel({ netWorth, accounts }: AccountBalancePanelProps) {
   const breakpoint = useBreakpoint()
   const isCompact = breakpoint !== 'desktop'
 
   const primaryFontSize = isCompact ? '26px' : '32px'
   const sublineFontSize = isCompact ? '12px' : '14px'
   const balanceFontSize = { mobile: '14px', tablet: '15px', desktop: '16px' }[breakpoint]
-
-  const netWorth = useNetWorth(baseUrl, token)
-
-  // Shared cache key with useNetWorth — TanStack Query deduplicates to one request
-  const { data: accountsData } = useQuery({
-    queryKey: ['accounts', 'asset,liability', baseUrl],
-    queryFn: () => fetchAssetAndLiabilityAccountBalances(baseUrl, token),
-    enabled: !!baseUrl && !!token,
-    staleTime: 60_000,
-  })
 
   const cardsStyle =
     breakpoint === 'desktop'
@@ -343,7 +330,7 @@ export function AccountBalancePanel({ baseUrl, token }: AccountBalancePanelProps
   const cardPadding = breakpoint === 'mobile' ? '10px 12px' : '12px 16px'
 
   const sortedAccounts = useMemo(() => {
-    const active = (accountsData ?? []).filter((a: Account) => a.active)
+    const active = accounts.filter((a) => a.active)
     const byCurrency = new Map<string, Account[]>()
     active.forEach((acc) => {
       const group = byCurrency.get(acc.currencyCode) ?? []
@@ -353,7 +340,7 @@ export function AccountBalancePanel({ baseUrl, token }: AccountBalancePanelProps
     return Array.from(byCurrency.values()).flatMap((group) =>
       group.sort((a, b) => b.currentBalance - a.currentBalance)
     )
-  }, [accountsData])
+  }, [accounts])
 
   if (netWorth.status === 'loading') return <SkeletonPanel breakpoint={breakpoint} />
 
@@ -394,7 +381,7 @@ export function AccountBalancePanel({ baseUrl, token }: AccountBalancePanelProps
       {/* Unavailable info banner */}
       {netWorth.status === 'unavailable' && <UnavailableBanner />}
 
-      {/* Account cards — rendered in all non-loading states when data is available */}
+      {/* Account cards */}
       {sortedAccounts.length > 0 && (
         <div style={cardsStyle}>
           {sortedAccounts.map((acc) => (
