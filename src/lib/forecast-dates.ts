@@ -1,3 +1,8 @@
+// All date computations in this module operate in the user's local timezone,
+// matching Firefly III's convention of storing dates relative to the user's
+// locale. Month boundaries (start/end/tomorrow) are computed against the local
+// clock, which is correct for a single-user SPA. Edge cases near midnight UTC
+// are acceptable — they resolve on the next render.
 import { format, startOfMonth, endOfMonth, getDaysInMonth, subMonths, addDays } from 'date-fns'
 
 export interface MonthRange {

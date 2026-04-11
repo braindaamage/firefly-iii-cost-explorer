@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { getPreference, putPreference } from '../api/preferences'
 import type { ForecastModel } from '../lib/forecast-weights'
@@ -92,7 +92,6 @@ export function useForecastConfig(baseUrl: string, token: string): UseForecastCo
       status = 'success'
       source = 'remote'
       config = remoteValue
-      writeLocalStorage(remoteValue)
     } else {
       // Malformed remote value — treat as not present
       console.warn('[useForecastConfig] Remote value malformed, falling back to defaults:', remoteValue)
@@ -113,6 +112,13 @@ export function useForecastConfig(baseUrl: string, token: string): UseForecastCo
       config = DEFAULTS
     }
   }
+
+  // Persist remote config to localStorage after a successful fetch, outside the render body.
+  useEffect(() => {
+    if (status === 'success' && source === 'remote') {
+      writeLocalStorage(config)
+    }
+  }, [status, source, config])
 
   async function updateConfig(next: ForecastConfig): Promise<void> {
     // 1. Optimistic write to localStorage immediately
