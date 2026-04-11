@@ -162,18 +162,7 @@ describe('fetchExpenseNoBill', () => {
     expect(url).toContain('end=2026-03-31')
   })
 
-  it('includes currency_code param when provided', async () => {
-    mockFetchOk(mockEntries)
-    await fetchExpenseNoBill(BASE_URL, TOKEN, {
-      start: '2026-03-01',
-      end: '2026-03-31',
-      currencyCode: 'EUR',
-    })
-    const url = vi.mocked(fetch).mock.calls[0][0] as string
-    expect(url).toContain('currency_code=EUR')
-  })
-
-  it('does not include currency_code param when not provided', async () => {
+  it('does not send any currency param (server ignores them; filtering is client-side)', async () => {
     mockFetchOk(mockEntries)
     await fetchExpenseNoBill(BASE_URL, TOKEN, {
       start: '2026-03-01',
@@ -181,6 +170,7 @@ describe('fetchExpenseNoBill', () => {
     })
     const url = vi.mocked(fetch).mock.calls[0][0] as string
     expect(url).not.toContain('currency_code')
+    expect(url).not.toContain('currencies')
   })
 
   it('includes Authorization header', async () => {
