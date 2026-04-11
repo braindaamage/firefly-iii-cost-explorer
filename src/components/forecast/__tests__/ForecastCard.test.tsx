@@ -50,6 +50,20 @@ const OK_FORECAST: ForecastResult = {
   breakdown: BREAKDOWN,
 }
 
+const OK_WITH_BILLS: ForecastResult = {
+  ...OK_FORECAST,
+  billsForecast: 70.98,
+  total: 720.98,
+  breakdown: {
+    ...BREAKDOWN,
+    pendingBills: [
+      { id: '1', name: 'Spotify', amount: 9.99, date: '2026-04-15' },
+      { id: '2', name: 'Netflix', amount: 15.99, date: '2026-04-20' },
+      { id: '3', name: 'Gym', amount: 45, date: '2026-04-25' },
+    ],
+  },
+}
+
 const PARTIAL_NO_HISTORY: ForecastResult = {
   status: 'partialNoHistory',
   currency: EUR_CURRENCY,
@@ -182,6 +196,50 @@ describe('ForecastCard', () => {
     render(<ForecastCard forecast={OK_FORECAST} config={DEFAULT_CONFIG} onOpenSettings={onOpenSettings} />)
     await userEvent.click(screen.getByRole('button', { name: /open forecast settings/i }))
     expect(onOpenSettings).toHaveBeenCalledOnce()
+  })
+
+  it('renders "View 3 pending bills" toggle when pendingBills.length > 0', () => {
+    renderCard(OK_WITH_BILLS)
+    expect(screen.getByRole('button', { name: /view 3 pending bills/i })).toBeInTheDocument()
+  })
+
+  it('does not render toggle when pendingBills is empty', () => {
+    renderCard(OK_FORECAST)
+    expect(screen.queryByRole('button', { name: /pending bills/i })).not.toBeInTheDocument()
+  })
+
+  it('clicking toggle expands the bill list with name, amount, date', async () => {
+    renderCard(OK_WITH_BILLS)
+    await userEvent.click(screen.getByRole('button', { name: /view 3 pending bills/i }))
+    expect(screen.getByText(/Spotify/)).toBeInTheDocument()
+    expect(screen.getByText(/Netflix/)).toBeInTheDocument()
+    expect(screen.getByText(/Gym/)).toBeInTheDocument()
+  })
+
+  it('clicking toggle again collapses the list', async () => {
+    renderCard(OK_WITH_BILLS)
+    const toggle = screen.getByRole('button', { name: /view 3 pending bills/i })
+    await userEvent.click(toggle)
+    expect(screen.getByText(/Spotify/)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /hide pending bills/i }))
+    expect(screen.queryByText(/Spotify/)).not.toBeInTheDocument()
+  })
+
+  it('toggle button has aria-expanded reflecting state', async () => {
+    renderCard(OK_WITH_BILLS)
+    const toggle = screen.getByRole('button', { name: /view 3 pending bills/i })
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    await userEvent.click(toggle)
+    expect(screen.getByRole('button', { name: /hide pending bills/i })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('does not render toggle in partialNoBills state', () => {
+    const partialWithBills: ForecastResult = {
+      ...PARTIAL_NO_BILLS,
+      breakdown: { ...BREAKDOWN, pendingBills: [{ id: '1', name: 'Spotify', amount: 9.99, date: '2026-04-15' }] },
+    }
+    renderCard(partialWithBills)
+    expect(screen.queryByRole('button', { name: /pending bills/i })).not.toBeInTheDocument()
   })
 
   it('formats CLP (decimalPlaces=0) without decimal places; EUR (decimalPlaces=2) with two', () => {

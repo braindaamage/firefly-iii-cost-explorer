@@ -1,5 +1,6 @@
+import { useState } from 'react'
 import { formatCurrency } from '../../lib/format-currency'
-import type { ForecastResult } from '../../hooks/computeForecast'
+import type { ForecastResult, PendingBill } from '../../hooks/computeForecast'
 import type { ForecastConfig } from '../../hooks/useForecastConfig'
 
 export interface ForecastCardProps {
@@ -80,6 +81,80 @@ function GearButton({ onClick }: { onClick: () => void }) {
           M12,15.6c-1.98,0-3.6-1.62-3.6-3.6s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z" />
       </svg>
     </button>
+  )
+}
+
+// ─── Expandable bills list ────────────────────────────────────────────────────
+
+function PendingBillsToggle({
+  bills,
+  currency,
+}: {
+  bills: PendingBill[]
+  currency: { code: string; decimalPlaces: number }
+}) {
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  if (bills.length === 0) return null
+
+  const label = isExpanded
+    ? 'Hide pending bills'
+    : `View ${bills.length} pending bill${bills.length !== 1 ? 's' : ''}`
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setIsExpanded((prev) => !prev)}
+        aria-expanded={isExpanded}
+        aria-controls="pending-bills-list"
+        style={{
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          color: '#8ab4f8',
+          fontSize: '13px',
+          fontFamily: "'Roboto', sans-serif",
+          padding: '0',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+        }}
+      >
+        {isExpanded ? '▲' : '▼'} {label}
+      </button>
+
+      {isExpanded && (
+        <ul
+          id="pending-bills-list"
+          role="list"
+          style={{
+            marginTop: '8px',
+            padding: '0',
+            listStyle: 'none',
+            backgroundColor: '#121212',
+            border: '1px solid #3c4043',
+            borderRadius: '6px',
+            overflow: 'hidden',
+          }}
+        >
+          {bills.map((bill, i) => (
+            <li
+              key={bill.id}
+              style={{
+                padding: '8px 12px',
+                color: '#9aa0a6',
+                fontSize: '13px',
+                fontFamily: "'Roboto', sans-serif",
+                borderTop: i > 0 ? '1px solid #3c4043' : 'none',
+              }}
+            >
+              {bill.name} · {formatCurrency(bill.amount, currency.code, currency.decimalPlaces)} · {bill.date}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }
 
@@ -276,8 +351,18 @@ export function ForecastCard({ forecast, config, onOpenSettings }: ForecastCardP
                 ? formatCurrency(billsForecast, currency.code, currency.decimalPlaces)
                 : '—'}
             </div>
+            {breakdown.pendingBills.length > 0 && (
+              <div style={{ color: '#9aa0a6', fontSize: '12px', fontFamily: "'Roboto', sans-serif", marginTop: '4px' }}>
+                {breakdown.pendingBills.length} bill{breakdown.pendingBills.length !== 1 ? 's' : ''}
+              </div>
+            )}
           </div>
         </div>
+      )}
+
+      {/* Expandable pending bills — only for ok / partialNoHistory */}
+      {currency && (status === 'ok' || status === 'partialNoHistory') && (
+        <PendingBillsToggle bills={breakdown.pendingBills} currency={currency} />
       )}
 
       {/* Footer */}
