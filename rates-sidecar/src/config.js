@@ -8,7 +8,9 @@
  *     restarting the container.
  */
 
-import { parseExpression } from 'cron-parser'
+// cron-parser is CJS; use default import for ESM interop
+import cronParser from 'cron-parser'
+const { parseExpression } = cronParser
 
 export const PREFERENCE_KEY = 'costExplorer.ratesSidecar'
 export const LAST_RUN_PREFERENCE_KEY = 'costExplorer.ratesSidecar.lastRun'

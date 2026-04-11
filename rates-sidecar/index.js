@@ -14,7 +14,9 @@
  */
 
 import { writeFileSync } from 'fs'
-import { parseExpression } from 'cron-parser'
+// cron-parser is CJS; use default import for ESM interop
+import cronParser from 'cron-parser'
+const { parseExpression } = cronParser
 import cron from 'node-cron'
 import { createFireflyClient } from './src/firefly-client.js'
 import { loadConfig, requiresCronReinstall, PREFERENCE_KEY } from './src/config.js'
