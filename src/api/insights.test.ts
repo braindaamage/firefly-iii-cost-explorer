@@ -5,6 +5,7 @@ import {
   fetchInsightExpenseByTag,
   fetchInsightExpenseByExpenseAccount,
   fetchInsightExpenseByAssetAccount,
+  fetchExpenseNoBill,
 } from './insights'
 import type { InsightEntry } from './types'
 
@@ -143,5 +144,53 @@ describe('fetchInsightExpenseByAssetAccount', () => {
     })
     const url = vi.mocked(fetch).mock.calls[0][0] as string
     expect(url).toContain('/insight/expense/asset')
+  })
+})
+
+describe('fetchExpenseNoBill', () => {
+  beforeEach(() => vi.restoreAllMocks())
+
+  it('calls /insight/expense/no-bill endpoint with start and end', async () => {
+    mockFetchOk(mockEntries)
+    await fetchExpenseNoBill(BASE_URL, TOKEN, {
+      start: '2026-03-01',
+      end: '2026-03-31',
+    })
+    const url = vi.mocked(fetch).mock.calls[0][0] as string
+    expect(url).toContain('/insight/expense/no-bill')
+    expect(url).toContain('start=2026-03-01')
+    expect(url).toContain('end=2026-03-31')
+  })
+
+  it('does not send any currency param (server ignores them; filtering is client-side)', async () => {
+    mockFetchOk(mockEntries)
+    await fetchExpenseNoBill(BASE_URL, TOKEN, {
+      start: '2026-03-01',
+      end: '2026-03-31',
+    })
+    const url = vi.mocked(fetch).mock.calls[0][0] as string
+    expect(url).not.toContain('currency_code')
+    expect(url).not.toContain('currencies')
+  })
+
+  it('includes Authorization header', async () => {
+    mockFetchOk(mockEntries)
+    await fetchExpenseNoBill(BASE_URL, TOKEN, {
+      start: '2026-03-01',
+      end: '2026-03-31',
+    })
+    const options = vi.mocked(fetch).mock.calls[0][1] as RequestInit
+    expect((options.headers as Record<string, string>)['Authorization']).toBe(
+      `Bearer ${TOKEN}`
+    )
+  })
+
+  it('returns parsed InsightEntry list', async () => {
+    mockFetchOk(mockEntries)
+    const result = await fetchExpenseNoBill(BASE_URL, TOKEN, {
+      start: '2026-03-01',
+      end: '2026-03-31',
+    })
+    expect(result).toEqual(mockEntries)
   })
 })
