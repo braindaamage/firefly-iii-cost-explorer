@@ -14,6 +14,10 @@ vi.mock('react-router-dom', async () => {
   }
 })
 
+vi.mock('./ForecastSettingsSection', () => ({
+  ForecastSettingsSection: () => null,
+}))
+
 const mockSaveConfig = vi.fn()
 const mockUseConfig = vi.fn()
 

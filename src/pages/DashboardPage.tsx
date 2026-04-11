@@ -12,6 +12,7 @@ import { BreakdownTable } from '../components/table/BreakdownTable'
 import { TransactionDrawer } from '../components/drawer/TransactionDrawer'
 import { ErrorBanner } from '../components/ui/ErrorBanner'
 import { AccountBalancePanel } from '../components/balance/AccountBalancePanel'
+import { ForecastCard } from '../components/forecast/ForecastCard'
 import { useFilters } from '../hooks/useFilters'
 import { useConfig } from '../hooks/useConfig'
 import { useBreakpoint } from '../hooks/useBreakpoint'
@@ -22,6 +23,9 @@ import { exportBreakdownCSV } from '../lib/csv-export'
 import { exportChartAsPNG } from '../lib/chart-export'
 import { fetchAssetAndLiabilityAccountBalances } from '../api/accounts'
 import { useNetWorth } from '../hooks/useNetWorth'
+import { useStableToday } from '../hooks/useStableToday'
+import { useForecast } from '../hooks/useForecast'
+import { useForecastConfig } from '../hooks/useForecastConfig'
 import type { BreakdownRow } from '../types/breakdown'
 
 export function DashboardPage() {
@@ -48,6 +52,9 @@ export function DashboardPage() {
   })
 
   const netWorth = useNetWorth(config?.baseUrl ?? '', config?.apiToken ?? '')
+  const today = useStableToday()
+  const forecast = useForecast(config?.baseUrl ?? '', config?.apiToken ?? '', today)
+  const { config: forecastConfig } = useForecastConfig(config?.baseUrl ?? '', config?.apiToken ?? '')
 
   const { granularity, updateGranularity } = useGranularity()
   const dashboardData = useDashboardData(filters, granularity)
@@ -102,6 +109,12 @@ export function DashboardPage() {
         <AccountBalancePanel
           netWorth={netWorth}
           accounts={accountsData ?? []}
+        />
+
+        <ForecastCard
+          forecast={forecast}
+          config={forecastConfig}
+          onOpenSettings={() => navigate('/config#forecast')}
         />
 
         {combinedError && !is401 && (
