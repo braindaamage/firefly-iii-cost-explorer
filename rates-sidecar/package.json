@@ -1,0 +1,23 @@
+{
+  "name": "firefly-rates-sidecar",
+  "version": "1.0.0",
+  "description": "Daily exchange rates sidecar for Firefly III (open.er-api + ECB fallback)",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "cron-parser": "^4.9.0",
+    "fast-xml-parser": "^4.5.3",
+    "node-cron": "^3.0.3"
+  },
+  "devDependencies": {
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
