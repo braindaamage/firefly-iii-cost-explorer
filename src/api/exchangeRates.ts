@@ -30,7 +30,7 @@ export async function fetchLatestExchangeRate(
 
   try {
     response = await client.fetch<PaginatedResponse<ExchangeRateRaw>>(
-      `/exchange-rates/${from}/${to}?limit=50`
+      `/exchange-rates/${from}/${to}?limit=50&page=1`
     )
   } catch (err) {
     if (err instanceof ApiError && err.statusCode === 404) {

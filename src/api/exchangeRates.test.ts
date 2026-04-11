@@ -116,4 +116,21 @@ describe('fetchLatestExchangeRate', () => {
     expect(result).toBeNull()
     expect(consoleSpy).toHaveBeenCalled()
   })
+
+  it('calls the correct URL with exchange-rates path, limit and page params', async () => {
+    mockFetchOk(paginatedResponse([makeRateRaw('1', '1.05', '2024-01-01')]))
+    await fetchLatestExchangeRate(BASE_URL, TOKEN, 'EUR', 'USD')
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      expect.stringContaining('/exchange-rates/EUR/USD'),
+      expect.anything()
+    )
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      expect.stringContaining('limit=50'),
+      expect.anything()
+    )
+    expect(vi.mocked(fetch)).toHaveBeenCalledWith(
+      expect.stringContaining('page=1'),
+      expect.anything()
+    )
+  })
 })
