@@ -79,7 +79,7 @@ export function useForecast(
         start: monthStart,
         end: todayISO,
       })
-      // /insight/expense/no-bill returns entries in native currency.
+      // /insight/expense/total returns entries in native currency.
       // Sum primary-currency entries directly; convert foreign entries
       // via exchange rates (same logic as computeForecast Step 4).
       const rates = exchangeRates
