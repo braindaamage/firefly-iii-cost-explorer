@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import { useQuery, useQueries } from '@tanstack/react-query'
 import { fetchCurrencies, findPrimary, findEnabledSecondaries } from '../api/currencies'
 import { fetchExpenseNoBill } from '../api/insights'
-import { fetchSummaryBasic } from '../api/summary'
 import { fetchBills } from '../api/bills'
 import { computeForecast } from './computeForecast'
 import { useForecastConfig } from './useForecastConfig'
@@ -72,15 +71,32 @@ export function useForecast(
     })),
   })
 
-  // --- MTD spend ---
+  // --- MTD spend via no-bill insight (same data source as Cost Breakdown) ---
   const mtdQuery = useQuery({
-    queryKey: ['forecast', 'mtd', baseUrl, primary?.code ?? '', monthStart, todayISO],
-    queryFn: () =>
-      fetchSummaryBasic(baseUrl, token, {
+    queryKey: ['forecast', 'mtd', baseUrl, primary?.code, monthStart, todayISO],
+    queryFn: async () => {
+      const entries = await fetchExpenseNoBill(baseUrl, token, {
         start: monthStart,
         end: todayISO,
-        currencyCode: primary!.code,
-      }),
+      })
+      // /insight/expense/no-bill returns entries in native currency.
+      // Sum primary-currency entries directly; convert foreign entries
+      // via exchange rates (same logic as computeForecast Step 4).
+      const rates = exchangeRates
+      const amount = entries.reduce((sum, e) => {
+        const nominal = Math.abs(e.difference_float)
+        if (e.currency_code === primary!.code) {
+          return sum + nominal
+        }
+        const rate = rates[e.currency_code]
+        if (rate != null) {
+          return sum + nominal * rate
+        }
+        // No rate for this currency — skip (conservative, same as computeForecast Step 4)
+        return sum
+      }, 0)
+      return { amount, currencyCode: primary!.code }
+    },
     staleTime: 5 * 60_000,
     enabled: enabled && !!primary,
   })
