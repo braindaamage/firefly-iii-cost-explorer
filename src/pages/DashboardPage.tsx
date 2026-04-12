@@ -201,7 +201,7 @@ export function DashboardPage() {
               forecastOverlay={forecastOverlay}
             />
             {!dashboardData.isLoading && dashboardData.series.length > 0 && (
-              <ChartLegend series={dashboardData.series} showForecast={!!forecastOverlay} />
+              <ChartLegend series={dashboardData.series} showForecast={!!forecastOverlay && !showCumulative} />
             )}
           </div>
           {isRefetching && (
