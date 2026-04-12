@@ -19,7 +19,7 @@ export interface InsightEntry {
   difference_float: number
   currency_id: string
   currency_code: string
-  currency_symbol: string
+  currency_symbol?: string
 }
 
 export interface CategoryRaw {

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ApiError } from '../api/client'
+import { fetchCurrencies, findEnabledSecondaries } from '../api/currencies'
 import { Header } from '../components/layout/Header'
 import { PageHeader } from '../components/layout/PageHeader'
 import { FilterBar } from '../components/filters/FilterBar'
@@ -26,6 +27,7 @@ import { useNetWorth } from '../hooks/useNetWorth'
 import { useStableToday } from '../hooks/useStableToday'
 import { useForecast } from '../hooks/useForecast'
 import { useForecastConfig } from '../hooks/useForecastConfig'
+import { useExchangeRates } from '../hooks/useExchangeRates'
 import type { BreakdownRow } from '../types/breakdown'
 
 export function DashboardPage() {
@@ -56,8 +58,29 @@ export function DashboardPage() {
   const forecast = useForecast(config?.baseUrl ?? '', config?.apiToken ?? '', today)
   const { config: forecastConfig } = useForecastConfig(config?.baseUrl ?? '', config?.apiToken ?? '')
 
+  // currencies query — same queryKey as useForecast internals; TanStack deduplicates to one request
+  const currenciesQuery = useQuery({
+    queryKey: ['currencies', config?.baseUrl ?? ''],
+    queryFn: () => fetchCurrencies(config!.baseUrl, config!.apiToken),
+    staleTime: 60 * 60_000,
+    enabled: !!config,
+  })
+
+  const primaryCode = forecast.currency?.code ?? ''
+  const foreignCodes = useMemo(() => {
+    if (!currenciesQuery.data || !primaryCode) return []
+    return findEnabledSecondaries(currenciesQuery.data).map((c) => c.code)
+  }, [currenciesQuery.data, primaryCode])
+
+  const { rates: exchangeRates } = useExchangeRates(
+    config?.baseUrl ?? '',
+    config?.apiToken ?? '',
+    primaryCode,
+    foreignCodes
+  )
+
   const { granularity, updateGranularity } = useGranularity()
-  const dashboardData = useDashboardData(filters, granularity)
+  const dashboardData = useDashboardData(filters, granularity, exchangeRates, primaryCode)
   const [showCumulative, setShowCumulative] = useState(false)
   const [selectedRow, setSelectedRow] = useState<BreakdownRow | null>(null)
 

@@ -1,11 +1,12 @@
 import { useMemo } from 'react'
 import { useQuery, useQueries } from '@tanstack/react-query'
-import { fetchCurrencies, findPrimary } from '../api/currencies'
+import { fetchCurrencies, findPrimary, findEnabledSecondaries } from '../api/currencies'
 import { fetchExpenseNoBill } from '../api/insights'
 import { fetchSummaryBasic } from '../api/summary'
 import { fetchBills } from '../api/bills'
 import { computeForecast } from './computeForecast'
 import { useForecastConfig } from './useForecastConfig'
+import { useExchangeRates } from './useExchangeRates'
 import {
   getMonthRanges,
   getMonthStart,
@@ -40,6 +41,18 @@ export function useForecast(
   const primary = useMemo(
     () => findPrimary(currenciesQuery.data ?? []),
     [currenciesQuery.data]
+  )
+
+  const foreignCodes = useMemo(
+    () => findEnabledSecondaries(currenciesQuery.data ?? []).map((c) => c.code),
+    [currenciesQuery.data]
+  )
+
+  const { rates: exchangeRates } = useExchangeRates(
+    baseUrl,
+    token,
+    primary?.code ?? '',
+    foreignCodes
   )
 
   // --- Historical month ranges (one per historyMonths config) ---
@@ -116,6 +129,7 @@ export function useForecast(
           status: billsQuery.status,
           data: billsQuery.data ?? null,
         },
+        exchangeRates,
       }),
     [
       today,
@@ -127,6 +141,7 @@ export function useForecast(
       billsQuery.status,
       billsQuery.data,
       monthRanges,
+      exchangeRates,
     ]
   )
 }

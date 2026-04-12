@@ -145,4 +145,86 @@ describe('useDashboardData', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(result.current.periods.length).toBeGreaterThan(0)
   })
+
+  describe('exchange rate conversion', () => {
+    const EUR_ENTRIES = [
+      { id: '1', name: 'Groceries', difference: '-500.00', difference_float: -500.0, currency_id: '1', currency_code: 'EUR', currency_symbol: '€' },
+      { id: '2', name: 'Transport', difference: '-200.00', difference_float: -200.0, currency_id: '1', currency_code: 'EUR', currency_symbol: '€' },
+    ]
+
+    beforeEach(async () => {
+      const { fetchInsightExpenseByCategory } = await import('../api/insights')
+      // Reset to default EUR mock before each test in this block
+      vi.mocked(fetchInsightExpenseByCategory).mockResolvedValue(EUR_ENTRIES)
+    })
+
+    it('converts foreign currency amounts using exchangeRates', async () => {
+      const { fetchInsightExpenseByCategory } = await import('../api/insights')
+      vi.mocked(fetchInsightExpenseByCategory).mockResolvedValue([
+        { id: '1', name: 'Foreign', difference: '-100.00', difference_float: -100.0, currency_id: '2', currency_code: 'USD' },
+      ])
+
+      const exchangeRates = { USD: 0.9 }
+      const { result } = renderHook(
+        () => useDashboardData({ ...DEFAULT_FILTERS }, 'auto', exchangeRates, 'EUR'),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+      const firstPoint = result.current.chartData[0]
+      // 100 USD * 0.9 = 90 EUR
+      expect(firstPoint['Foreign']).toBeCloseTo(90, 8)
+    })
+
+    it('uses nominal amount as fallback when exchangeRates is undefined', async () => {
+      const { fetchInsightExpenseByCategory } = await import('../api/insights')
+      vi.mocked(fetchInsightExpenseByCategory).mockResolvedValue([
+        { id: '1', name: 'Foreign', difference: '-100.00', difference_float: -100.0, currency_id: '2', currency_code: 'USD' },
+      ])
+
+      const { result } = renderHook(
+        () => useDashboardData({ ...DEFAULT_FILTERS }),  // no exchangeRates
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+      const firstPoint = result.current.chartData[0]
+      expect(firstPoint['Foreign']).toBe(100)  // nominal, no conversion
+    })
+
+    it('uses nominal as fallback when rate for the entry currency is missing', async () => {
+      const { fetchInsightExpenseByCategory } = await import('../api/insights')
+      vi.mocked(fetchInsightExpenseByCategory).mockResolvedValue([
+        { id: '1', name: 'Foreign', difference: '-100.00', difference_float: -100.0, currency_id: '2', currency_code: 'GBP' },
+      ])
+
+      const exchangeRates = { USD: 0.9 }  // no GBP rate
+      const { result } = renderHook(
+        () => useDashboardData({ ...DEFAULT_FILTERS }, 'auto', exchangeRates, 'EUR'),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+      const firstPoint = result.current.chartData[0]
+      expect(firstPoint['Foreign']).toBe(100)  // fallback to nominal
+    })
+
+    it('uses primaryCurrencyCode as currencyCode when provided', async () => {
+      const { result } = renderHook(
+        () => useDashboardData({ ...DEFAULT_FILTERS }, 'auto', {}, 'EUR'),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+      expect(result.current.currencyCode).toBe('EUR')
+    })
+
+    it('primary currency entries are NOT converted even when exchangeRates is provided', async () => {
+      const { result } = renderHook(
+        () => useDashboardData({ ...DEFAULT_FILTERS }, 'auto', { EUR: 999 }, 'EUR'),
+        { wrapper }
+      )
+      await waitFor(() => expect(result.current.isLoading).toBe(false))
+      const firstPoint = result.current.chartData[0]
+      // EUR 500 should not be multiplied by the EUR entry in exchangeRates
+      expect(firstPoint['Groceries']).toBe(500)
+      expect(firstPoint['Transport']).toBe(200)
+    })
+  })
 })

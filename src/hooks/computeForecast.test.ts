@@ -609,6 +609,111 @@ describe('computeForecast — bill filtering', () => {
 })
 
 // ---------------------------------------------------------------------------
+// Exchange rate conversion
+// ---------------------------------------------------------------------------
+
+describe('computeForecast — exchangeRates', () => {
+  it('with exchangeRates, foreign entries are converted and included in daily rate', () => {
+    // 120 USD * 0.9 = 108 EUR equivalent; plus 620 EUR = 728 total over 30 days
+    const usdEntry = entry('USD', 120)
+    const eurEntry = entry('EUR', 620)
+    const mixedMonth = success({ entries: [usdEntry, eurEntry], daysInMonth: 30 })
+    const result = computeForecast(
+      makeInputs({
+        config: { historyMonths: 1, model: 'simple' },
+        historicalQueries: [mixedMonth],
+        exchangeRates: { USD: 0.9 },
+      })
+    )
+    expect(result.breakdown.weightedAvgDaily).toBeCloseTo((620 + 108) / 30, 8)
+    expect(result.breakdown.historyMonthsUsed).toBe(1)
+    expect(result.status).toBe('ok')
+  })
+
+  it('without exchangeRates (undefined), foreign entries are excluded — backward compatible', () => {
+    // Same scenario as above but no exchangeRates → USD skipped, only EUR 620
+    const usdEntry = entry('USD', 120)
+    const eurEntry = entry('EUR', 620)
+    const mixedMonth = success({ entries: [usdEntry, eurEntry], daysInMonth: 31 })
+    const result = computeForecast(
+      makeInputs({
+        config: { historyMonths: 1, model: 'simple' },
+        historicalQueries: [mixedMonth],
+        // exchangeRates: not provided
+      })
+    )
+    expect(result.breakdown.weightedAvgDaily).toBeCloseTo(620 / 31, 8)
+  })
+
+  it('all-foreign month with exchange rate: included with converted spend', () => {
+    // 300 USD * 0.9 = 270 EUR equivalent over 30 days
+    const usdOnlyMonth = success({ entries: [entry('USD', 300)], daysInMonth: 30 })
+    const result = computeForecast(
+      makeInputs({
+        config: { historyMonths: 1, model: 'simple' },
+        historicalQueries: [usdOnlyMonth],
+        exchangeRates: { USD: 0.9 },
+      })
+    )
+    expect(result.breakdown.weightedAvgDaily).toBeCloseTo(270 / 30, 8)
+    expect(result.breakdown.historyMonthsUsed).toBe(1)
+    expect(result.status).toBe('ok')
+  })
+
+  it('entry in currency with no rate is skipped (conservative)', () => {
+    // CLP has no rate; only EUR 620 contributes
+    const clpEntry = entry('CLP', 5000)
+    const eurEntry = entry('EUR', 620)
+    const mixedMonth = success({ entries: [clpEntry, eurEntry], daysInMonth: 30 })
+    const result = computeForecast(
+      makeInputs({
+        config: { historyMonths: 1, model: 'simple' },
+        historicalQueries: [mixedMonth],
+        exchangeRates: { USD: 0.9 },  // no CLP rate
+      })
+    )
+    expect(result.breakdown.weightedAvgDaily).toBeCloseTo(620 / 30, 8)
+  })
+
+  it('all-foreign month with no rate is excluded even with exchangeRates present (conservative)', () => {
+    const clpOnlyMonth = success({ entries: [entry('CLP', 5000)], daysInMonth: 30 })
+    const result = computeForecast(
+      makeInputs({
+        config: { historyMonths: 1, model: 'simple' },
+        historicalQueries: [clpOnlyMonth],
+        exchangeRates: { USD: 0.9 },  // no CLP rate
+      })
+    )
+    expect(result.breakdown.historyMonthsUsed).toBe(0)
+    expect(result.status).toBe('partialNoHistory')
+  })
+
+  it('empty exchangeRates ({}) behaves identically to undefined', () => {
+    const usdEntry = entry('USD', 500)
+    const eurEntry = entry('EUR', 620)
+    const mixedMonth = success({ entries: [usdEntry, eurEntry], daysInMonth: 31 })
+
+    const withUndefined = computeForecast(
+      makeInputs({
+        config: { historyMonths: 1, model: 'simple' },
+        historicalQueries: [mixedMonth],
+      })
+    )
+    const withEmpty = computeForecast(
+      makeInputs({
+        config: { historyMonths: 1, model: 'simple' },
+        historicalQueries: [mixedMonth],
+        exchangeRates: {},
+      })
+    )
+    expect(withUndefined.breakdown.weightedAvgDaily).toBeCloseTo(
+      withEmpty.breakdown.weightedAvgDaily!,
+      8
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
 // Edge cases
 // ---------------------------------------------------------------------------
 

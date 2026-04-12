@@ -64,18 +64,24 @@ function buildFilterParams(filters: FilterState) {
 
 function processResults(
   periods: Period[],
-  results: (InsightEntry[] | undefined)[]
+  results: (InsightEntry[] | undefined)[],
+  exchangeRates?: Record<string, number>,
+  primaryCurrencyCode?: string
 ): { chartData: ChartDataPoint[]; series: SeriesData[]; currencyCode: string } {
   // Collect all unique series names in insertion order
   const seriesMap = new Map<string, { id: string; name: string }>()
-  let currencyCode = ''
+  let currencyCode = primaryCurrencyCode ?? ''
 
   results.forEach((entries) => {
     entries?.forEach((entry) => {
       if (!seriesMap.has(entry.name)) {
         seriesMap.set(entry.name, { id: entry.id, name: entry.name })
       }
-      if (entry.currency_code) currencyCode = entry.currency_code
+      if (primaryCurrencyCode) {
+        currencyCode = primaryCurrencyCode
+      } else if (entry.currency_code) {
+        currencyCode = entry.currency_code
+      }
     })
   })
 
@@ -91,7 +97,18 @@ function processResults(
     const point: ChartDataPoint = { period: period.label }
     seriesNames.forEach((name) => {
       const entry = entries.find((e) => e.name === name)
-      point[name] = entry ? Math.abs(entry.difference_float) : 0
+      if (!entry) {
+        point[name] = 0
+      } else {
+        const nominal = Math.abs(entry.difference_float)
+        if (!exchangeRates || !primaryCurrencyCode || entry.currency_code === primaryCurrencyCode) {
+          point[name] = nominal
+        } else {
+          const rate = exchangeRates[entry.currency_code]
+          // Fallback to nominal if rate is unavailable — avoids silently hiding data
+          point[name] = rate != null ? nominal * rate : nominal
+        }
+      }
     })
     return point
   })
@@ -99,7 +116,12 @@ function processResults(
   return { chartData, series, currencyCode }
 }
 
-export function useDashboardData(filters: FilterState, granularityOverride: GranularityOption = 'auto'): DashboardData {
+export function useDashboardData(
+  filters: FilterState,
+  granularityOverride: GranularityOption = 'auto',
+  exchangeRates?: Record<string, number>,
+  primaryCurrencyCode?: string
+): DashboardData {
   const { config } = useConfig()
   const enabled = !!config
   const baseUrl = config?.baseUrl ?? ''
@@ -148,8 +170,8 @@ export function useDashboardData(filters: FilterState, granularityOverride: Gran
 
   const { chartData, series, currencyCode } = useMemo(() => {
     const allData = queryResults.map((r) => r.data)
-    return processResults(periods, allData)
-  }, [queryResults, periods])
+    return processResults(periods, allData, exchangeRates, primaryCurrencyCode)
+  }, [queryResults, periods, exchangeRates, primaryCurrencyCode])
 
   return { chartData, series, currencyCode, isLoading, isFetching, error, rawError, refetch, periods }
 }
