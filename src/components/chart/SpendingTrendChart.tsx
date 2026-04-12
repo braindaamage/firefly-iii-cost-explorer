@@ -13,6 +13,9 @@ import { ForecastOverlay } from './ForecastOverlay'
 import type { ChartDataPoint, SeriesData } from '../../hooks/useDashboardData'
 import type { ForecastOverlayPoint } from '../../lib/forecast-overlay'
 
+/** Shared with <ForecastOverlay> so ghost bars match actual bar inset. */
+const BAR_CATEGORY_GAP = 8
+
 interface SpendingTrendChartProps {
   data: ChartDataPoint[]
   series: SeriesData[]
@@ -203,7 +206,7 @@ export function SpendingTrendChart({
         <BarChart
           data={chartData}
           margin={{ top: 8, right: 8, left: 8, bottom: 8 }}
-          barCategoryGap={8}
+          barCategoryGap={BAR_CATEGORY_GAP}
         >
           <CartesianGrid vertical={false} stroke="#3c4043" strokeDasharray="" />
           <XAxis
@@ -232,7 +235,7 @@ export function SpendingTrendChart({
             cursor={{ fill: 'rgba(255,255,255,0.04)' }}
           />
           {forecastOverlay && !cumulative && (
-            <ForecastOverlay forecastData={forecastOverlay} />
+            <ForecastOverlay forecastData={forecastOverlay} barCategoryGap={BAR_CATEGORY_GAP} />
           )}
           {series.map((s, i) => (
             <Bar
