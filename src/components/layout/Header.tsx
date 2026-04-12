@@ -21,7 +21,7 @@ export function Header({ showSettings }: HeaderProps) {
         flexShrink: 0,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: '10px', textDecoration: 'none' }}>
         <svg
           width="24"
           height="24"
@@ -46,7 +46,7 @@ export function Header({ showSettings }: HeaderProps) {
         >
           {breakpoint === 'mobile' ? 'Cost Explorer' : 'Firefly III Cost Explorer'}
         </span>
-      </div>
+      </Link>
 
       {showSettings && (
         <Link

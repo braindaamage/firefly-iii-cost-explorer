@@ -120,6 +120,16 @@ export function useForecastConfig(baseUrl: string, token: string): UseForecastCo
     }
   }, [status, source, config])
 
+  // Auto-create preference on first use (eliminates 404 on subsequent loads)
+  useEffect(() => {
+    if (enabled && query.status === 'success' && query.data === null && !putFailed) {
+      putPreference(baseUrl, token, PREFERENCE_KEY, DEFAULTS).catch(() => {
+        // Silently ignore — defaults work without remote persistence.
+        // The preference will be created on the user's first explicit save.
+      })
+    }
+  }, [enabled, query.status, query.data, putFailed, baseUrl, token])
+
   async function updateConfig(next: ForecastConfig): Promise<void> {
     // 1. Optimistic write to localStorage immediately
     writeLocalStorage(next)

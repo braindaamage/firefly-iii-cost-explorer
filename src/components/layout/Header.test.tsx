@@ -36,4 +36,10 @@ describe('Header', () => {
     const link = screen.getByRole('link', { name: /settings/i })
     expect(link).toHaveAttribute('href', '/config')
   })
+
+  it('logo and title link to home', () => {
+    renderHeader(false)
+    const homeLink = screen.getByRole('link', { name: /firefly iii cost explorer/i })
+    expect(homeLink).toHaveAttribute('href', '/')
+  })
 })
