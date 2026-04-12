@@ -9,7 +9,9 @@ import {
 } from 'recharts'
 import { formatCurrencyShort, formatCurrency } from '../../lib/formatters'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
+import { ForecastOverlay } from './ForecastOverlay'
 import type { ChartDataPoint, SeriesData } from '../../hooks/useDashboardData'
+import type { ForecastOverlayPoint } from '../../lib/forecast-overlay'
 
 interface SpendingTrendChartProps {
   data: ChartDataPoint[]
@@ -17,6 +19,7 @@ interface SpendingTrendChartProps {
   currencyCode: string
   isLoading: boolean
   cumulative: boolean
+  forecastOverlay?: ForecastOverlayPoint[]
 }
 
 function accumulateData(
@@ -41,12 +44,14 @@ interface CustomTooltipProps {
   payload?: Array<{ name: string; value: number; color: string }>
   label?: string
   currencyCode: string
+  forecastOverlay?: ForecastOverlayPoint[]
 }
 
-function CustomTooltip({ active, payload, label, currencyCode }: CustomTooltipProps) {
+function CustomTooltip({ active, payload, label, currencyCode, forecastOverlay }: CustomTooltipProps) {
   if (!active || !payload || payload.length === 0) return null
 
   const total = payload.reduce((sum, p) => sum + (p.value || 0), 0)
+  const forecastValue = forecastOverlay?.find((p) => p.periodLabel === label)?.value ?? 0
 
   return (
     <div
@@ -105,6 +110,18 @@ function CustomTooltip({ active, payload, label, currencyCode }: CustomTooltipPr
       >
         Total: {formatCurrency(total, currencyCode)}
       </div>
+      {forecastValue > 0 && (
+        <div
+          style={{
+            marginTop: '6px',
+            fontSize: '12px',
+            color: '#9aa0a6',
+            fontStyle: 'italic',
+          }}
+        >
+          Forecast: {formatCurrency(forecastValue, currencyCode)}
+        </div>
+      )}
     </div>
   )
 }
@@ -115,6 +132,7 @@ export function SpendingTrendChart({
   currencyCode,
   isLoading,
   cumulative,
+  forecastOverlay,
 }: SpendingTrendChartProps) {
   const breakpoint = useBreakpoint()
   const chartHeight = breakpoint === 'mobile' ? 250 : 400
@@ -202,11 +220,20 @@ export function SpendingTrendChart({
             width={60}
           />
           <Tooltip
-            content={
-              <CustomTooltip currencyCode={currencyCode} />
-            }
+            content={({ active, payload, label }) => (
+              <CustomTooltip
+                active={active}
+                payload={payload as unknown as CustomTooltipProps['payload']}
+                label={label != null ? String(label) : undefined}
+                currencyCode={currencyCode}
+                forecastOverlay={!cumulative ? forecastOverlay : undefined}
+              />
+            )}
             cursor={{ fill: 'rgba(255,255,255,0.04)' }}
           />
+          {forecastOverlay && !cumulative && (
+            <ForecastOverlay forecastData={forecastOverlay} />
+          )}
           {series.map((s, i) => (
             <Bar
               key={s.id}

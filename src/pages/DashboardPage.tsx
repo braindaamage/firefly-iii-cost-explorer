@@ -28,6 +28,7 @@ import { useStableToday } from '../hooks/useStableToday'
 import { useForecast } from '../hooks/useForecast'
 import { useForecastConfig } from '../hooks/useForecastConfig'
 import { useExchangeRates } from '../hooks/useExchangeRates'
+import { computeForecastOverlay } from '../lib/forecast-overlay'
 import type { BreakdownRow } from '../types/breakdown'
 
 export function DashboardPage() {
@@ -88,6 +89,21 @@ export function DashboardPage() {
     () => transformToBreakdownRows(dashboardData.chartData, dashboardData.series),
     [dashboardData.chartData, dashboardData.series]
   )
+
+  const forecastOverlay = useMemo(() => {
+    if (filters.timeRange !== 'this_month') return undefined
+    if (
+      forecast.status !== 'ok' &&
+      forecast.status !== 'partialNoHistory' &&
+      forecast.status !== 'partialNoBills'
+    ) return undefined
+    return computeForecastOverlay(
+      dashboardData.periods,
+      forecast.breakdown.weightedAvgDaily,
+      forecast.breakdown.pendingBills,
+      today.toISOString().slice(0, 10)
+    )
+  }, [filters.timeRange, forecast.status, forecast.breakdown, dashboardData.periods, today])
 
   const periods = dashboardData.periods.map((p) => p.label)
 
@@ -182,9 +198,10 @@ export function DashboardPage() {
               currencyCode={dashboardData.currencyCode}
               isLoading={dashboardData.isLoading}
               cumulative={showCumulative}
+              forecastOverlay={forecastOverlay}
             />
             {!dashboardData.isLoading && dashboardData.series.length > 0 && (
-              <ChartLegend series={dashboardData.series} />
+              <ChartLegend series={dashboardData.series} showForecast={!!forecastOverlay && !showCumulative} />
             )}
           </div>
           {isRefetching && (

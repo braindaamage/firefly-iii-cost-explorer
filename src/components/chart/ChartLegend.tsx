@@ -2,9 +2,10 @@ import type { SeriesData } from '../../hooks/useDashboardData'
 
 interface ChartLegendProps {
   series: SeriesData[]
+  showForecast?: boolean
 }
 
-export function ChartLegend({ series }: ChartLegendProps) {
+export function ChartLegend({ series, showForecast }: ChartLegendProps) {
   return (
     <div
       style={{
@@ -41,6 +42,31 @@ export function ChartLegend({ series }: ChartLegendProps) {
           </span>
         </div>
       ))}
+      {showForecast && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span
+            style={{
+              width: '12px',
+              height: '12px',
+              borderRadius: '2px',
+              backgroundColor: 'rgba(255, 255, 255, 0.12)',
+              border: '1px dashed rgba(255, 255, 255, 0.3)',
+              flexShrink: 0,
+            }}
+            aria-hidden="true"
+          />
+          <span
+            style={{
+              fontFamily: "'Roboto', sans-serif",
+              fontWeight: 400,
+              fontSize: '11px',
+              color: '#9aa0a6',
+            }}
+          >
+            Forecast
+          </span>
+        </div>
+      )}
     </div>
   )
 }
