@@ -105,7 +105,7 @@ function NetByCurrencyRow({ netByCurrency, isCompact, fontSize }: NetByCurrencyR
           fontWeight: 500,
         }}
       >
-        Por moneda
+        By currency
       </div>
       <div
         data-testid="net-by-currency-values"

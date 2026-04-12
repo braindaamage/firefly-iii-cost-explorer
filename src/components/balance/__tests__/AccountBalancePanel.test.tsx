@@ -544,7 +544,7 @@ describe('AccountBalancePanel — tier 2: net by currency', () => {
   it('renders net-by-currency tier in ok state with label and values', () => {
     render(<AccountBalancePanel netWorth={OK_THREE_CURRENCIES} accounts={[]} />)
     expect(screen.getByTestId('net-by-currency-label')).toBeInTheDocument()
-    expect(screen.getByTestId('net-by-currency-label')).toHaveTextContent('Por moneda')
+    expect(screen.getByTestId('net-by-currency-label')).toHaveTextContent('By currency')
     expect(screen.getByTestId('net-by-currency-CLP')).toBeInTheDocument()
     expect(screen.getByTestId('net-by-currency-EUR')).toBeInTheDocument()
     expect(screen.getByTestId('net-by-currency-USD')).toBeInTheDocument()
