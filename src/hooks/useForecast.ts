@@ -73,18 +73,26 @@ export function useForecast(
 
   // --- MTD spend via no-bill insight (same data source as Cost Breakdown) ---
   const mtdQuery = useQuery({
-    queryKey: ['forecast', 'mtd', baseUrl, monthStart, todayISO],
+    queryKey: ['forecast', 'mtd', baseUrl, primary?.code, monthStart, todayISO],
     queryFn: async () => {
       const entries = await fetchExpenseNoBill(baseUrl, token, {
         start: monthStart,
         end: todayISO,
       })
-      // All insight entries are returned in primary currency server-side.
-      // Sum primary-currency entries; skip any foreign entries (conservative).
+      // /insight/expense/no-bill returns entries in native currency.
+      // Sum primary-currency entries directly; convert foreign entries
+      // via exchange rates (same logic as computeForecast Step 4).
+      const rates = exchangeRates
       const amount = entries.reduce((sum, e) => {
+        const nominal = Math.abs(e.difference_float)
         if (e.currency_code === primary!.code) {
-          return sum + Math.abs(e.difference_float)
+          return sum + nominal
         }
+        const rate = rates[e.currency_code]
+        if (rate != null) {
+          return sum + nominal * rate
+        }
+        // No rate for this currency — skip (conservative, same as computeForecast Step 4)
         return sum
       }, 0)
       return { amount, currencyCode: primary!.code }
