@@ -6,6 +6,7 @@ import {
   fetchInsightExpenseByExpenseAccount,
   fetchInsightExpenseByAssetAccount,
   fetchExpenseNoBill,
+  fetchInsightExpenseTotal,
 } from './insights'
 import type { InsightEntry } from './types'
 
@@ -188,6 +189,43 @@ describe('fetchExpenseNoBill', () => {
   it('returns parsed InsightEntry list', async () => {
     mockFetchOk(mockEntries)
     const result = await fetchExpenseNoBill(BASE_URL, TOKEN, {
+      start: '2026-03-01',
+      end: '2026-03-31',
+    })
+    expect(result).toEqual(mockEntries)
+  })
+})
+
+describe('fetchInsightExpenseTotal', () => {
+  beforeEach(() => vi.restoreAllMocks())
+
+  it('calls /insight/expense/total endpoint with start and end', async () => {
+    mockFetchOk(mockEntries)
+    await fetchInsightExpenseTotal(BASE_URL, TOKEN, {
+      start: '2026-03-01',
+      end: '2026-03-31',
+    })
+    const url = vi.mocked(fetch).mock.calls[0][0] as string
+    expect(url).toContain('/insight/expense/total')
+    expect(url).toContain('start=2026-03-01')
+    expect(url).toContain('end=2026-03-31')
+  })
+
+  it('includes Authorization header', async () => {
+    mockFetchOk(mockEntries)
+    await fetchInsightExpenseTotal(BASE_URL, TOKEN, {
+      start: '2026-03-01',
+      end: '2026-03-31',
+    })
+    const options = vi.mocked(fetch).mock.calls[0][1] as RequestInit
+    expect((options.headers as Record<string, string>)['Authorization']).toBe(
+      `Bearer ${TOKEN}`
+    )
+  })
+
+  it('returns parsed InsightEntry list', async () => {
+    mockFetchOk(mockEntries)
+    const result = await fetchInsightExpenseTotal(BASE_URL, TOKEN, {
       start: '2026-03-01',
       end: '2026-03-31',
     })

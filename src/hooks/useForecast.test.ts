@@ -7,7 +7,10 @@ import type { ForecastConfig } from './useForecastConfig'
 
 // --- Module mocks ---
 vi.mock('../api/bills', () => ({ fetchBills: vi.fn() }))
-vi.mock('../api/insights', () => ({ fetchExpenseNoBill: vi.fn() }))
+vi.mock('../api/insights', () => ({
+  fetchExpenseNoBill: vi.fn(),
+  fetchInsightExpenseTotal: vi.fn(),
+}))
 vi.mock('../api/currencies', async (orig) => {
   const actual = await orig<typeof import('../api/currencies')>()
   return { ...actual, fetchCurrencies: vi.fn() }
@@ -17,10 +20,6 @@ vi.mock('./useForecastConfig', () => ({ useForecastConfig: vi.fn() }))
 const BASE_URL = 'https://firefly.example.com'
 const TOKEN = 'test-token'
 const TODAY = new Date('2026-04-15')
-
-// MTD date range for today=2026-04-15
-const MTD_START = '2026-04-01'
-const MTD_END = '2026-04-15'
 
 const EUR_CURRENCY = {
   id: '1',
@@ -48,17 +47,6 @@ const makeHistoryEntries = (amount: number) => [
     currency_symbol: '€',
   },
 ]
-
-/**
- * Returns a mockImplementation for fetchExpenseNoBill that differentiates
- * the MTD call (start=MTD_START, end=MTD_END) from historical calls.
- */
-function makeMTDImpl(mtdAmount: number, historyAmount: number) {
-  return (_: string, __: string, params: { start: string; end: string }) =>
-    params.start === MTD_START && params.end === MTD_END
-      ? Promise.resolve(makeHistoryEntries(mtdAmount))
-      : Promise.resolve(makeHistoryEntries(historyAmount))
-}
 
 function makeWrapper() {
   const client = new QueryClient({
@@ -119,8 +107,9 @@ describe('useForecast', () => {
     vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
     const { fetchBills } = await import('../api/bills')
     vi.mocked(fetchBills).mockResolvedValue(MOCK_BILLS)
-    const { fetchExpenseNoBill } = await import('../api/insights')
-    // First call resolves; all subsequent (including MTD and remaining history) never do
+    const { fetchExpenseNoBill, fetchInsightExpenseTotal } = await import('../api/insights')
+    vi.mocked(fetchInsightExpenseTotal).mockResolvedValue(makeHistoryEntries(500))
+    // First history call resolves; remaining never do
     vi.mocked(fetchExpenseNoBill)
       .mockResolvedValueOnce(makeHistoryEntries(300))
       .mockReturnValue(new Promise(() => {}))
@@ -141,13 +130,9 @@ describe('useForecast', () => {
     vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
     const { fetchBills } = await import('../api/bills')
     vi.mocked(fetchBills).mockResolvedValue(MOCK_BILLS)
-    const { fetchExpenseNoBill } = await import('../api/insights')
-    // MTD call rejects; historical calls resolve normally
-    vi.mocked(fetchExpenseNoBill).mockImplementation((_, __, params) =>
-      params.start === MTD_START && params.end === MTD_END
-        ? Promise.reject(new Error('API error'))
-        : Promise.resolve(makeHistoryEntries(300))
-    )
+    const { fetchExpenseNoBill, fetchInsightExpenseTotal } = await import('../api/insights')
+    vi.mocked(fetchInsightExpenseTotal).mockRejectedValue(new Error('API error'))
+    vi.mocked(fetchExpenseNoBill).mockResolvedValue(makeHistoryEntries(300))
 
     const { result } = renderHook(() => useForecast(BASE_URL, TOKEN, TODAY), {
       wrapper: makeWrapper(),
@@ -161,7 +146,8 @@ describe('useForecast', () => {
     vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
     const { fetchBills } = await import('../api/bills')
     vi.mocked(fetchBills).mockRejectedValue(new Error('bills error'))
-    const { fetchExpenseNoBill } = await import('../api/insights')
+    const { fetchExpenseNoBill, fetchInsightExpenseTotal } = await import('../api/insights')
+    vi.mocked(fetchInsightExpenseTotal).mockResolvedValue(makeHistoryEntries(500))
     vi.mocked(fetchExpenseNoBill).mockResolvedValue(makeHistoryEntries(300))
 
     const { result } = renderHook(() => useForecast(BASE_URL, TOKEN, TODAY), {
@@ -176,13 +162,12 @@ describe('useForecast', () => {
     vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
     const { fetchBills } = await import('../api/bills')
     vi.mocked(fetchBills).mockResolvedValue(MOCK_BILLS)
-    const { fetchExpenseNoBill } = await import('../api/insights')
-    // MTD returns EUR (so mtdSpent is meaningful); history returns USD (excluded from daily rates)
-    vi.mocked(fetchExpenseNoBill).mockImplementation((_, __, params) =>
-      params.start === MTD_START && params.end === MTD_END
-        ? Promise.resolve(makeHistoryEntries(500))
-        : Promise.resolve([{ ...makeHistoryEntries(300)[0], currency_code: 'USD' }])
-    )
+    const { fetchExpenseNoBill, fetchInsightExpenseTotal } = await import('../api/insights')
+    vi.mocked(fetchInsightExpenseTotal).mockResolvedValue(makeHistoryEntries(500))
+    // History returns USD (excluded from daily rates — no exchange rate available)
+    vi.mocked(fetchExpenseNoBill).mockResolvedValue([
+      { ...makeHistoryEntries(300)[0], currency_code: 'USD' },
+    ])
 
     const { result } = renderHook(() => useForecast(BASE_URL, TOKEN, TODAY), {
       wrapper: makeWrapper(),
@@ -198,15 +183,12 @@ describe('useForecast', () => {
     vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
     const { fetchBills } = await import('../api/bills')
     vi.mocked(fetchBills).mockRejectedValue(new Error('bills unavailable'))
-    const { fetchExpenseNoBill } = await import('../api/insights')
-    // MTD returns EUR; history returns USD (→ historyMonthsUsed = 0) + bills fail → unavailable
-    vi.mocked(fetchExpenseNoBill).mockImplementation((_, __, params) =>
-      params.start === MTD_START && params.end === MTD_END
-        ? Promise.resolve(makeHistoryEntries(500))
-        : Promise.resolve([
-            { id: '1', name: 'USD spend', difference: '-500.00', difference_float: -500, currency_id: '2', currency_code: 'USD', currency_symbol: '$' },
-          ])
-    )
+    const { fetchExpenseNoBill, fetchInsightExpenseTotal } = await import('../api/insights')
+    vi.mocked(fetchInsightExpenseTotal).mockResolvedValue(makeHistoryEntries(500))
+    // History returns USD (→ historyMonthsUsed = 0) + bills fail → unavailable
+    vi.mocked(fetchExpenseNoBill).mockResolvedValue([
+      { id: '1', name: 'USD spend', difference: '-500.00', difference_float: -500, currency_id: '2', currency_code: 'USD', currency_symbol: '$' },
+    ])
 
     const { result } = renderHook(() => useForecast(BASE_URL, TOKEN, TODAY), {
       wrapper: makeWrapper(),
@@ -225,15 +207,16 @@ describe('useForecast', () => {
     //                  = (3/6)*(9.677) + (2/6)*(10.714) + (1/6)*(9.677)
     //                  ≈ 4.839 + 3.571 + 1.613 ≈ 10.023
     // variableForecast = 10.023 * 15 ≈ 150.35
-    // MTD = 500 (from MTD call), bills = 0
+    // MTD = 500 (from fetchInsightExpenseTotal), bills = 0
     // total ≈ 500 + 150.35 + 0 = 650.35
     await setupConfigMock({ historyMonths: 3, model: 'weighted' })
     const { fetchCurrencies } = await import('../api/currencies')
     vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
     const { fetchBills } = await import('../api/bills')
     vi.mocked(fetchBills).mockResolvedValue(MOCK_BILLS)
-    const { fetchExpenseNoBill } = await import('../api/insights')
-    vi.mocked(fetchExpenseNoBill).mockImplementation(makeMTDImpl(500, 300))
+    const { fetchExpenseNoBill, fetchInsightExpenseTotal } = await import('../api/insights')
+    vi.mocked(fetchInsightExpenseTotal).mockResolvedValue(makeHistoryEntries(500))
+    vi.mocked(fetchExpenseNoBill).mockResolvedValue(makeHistoryEntries(300))
 
     const { result } = renderHook(() => useForecast(BASE_URL, TOKEN, TODAY), {
       wrapper: makeWrapper(),
@@ -250,7 +233,8 @@ describe('useForecast', () => {
     await setupConfigMock({ historyMonths: 3, model: 'weighted' })
     const { fetchCurrencies } = await import('../api/currencies')
     vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
-    const { fetchExpenseNoBill } = await import('../api/insights')
+    const { fetchExpenseNoBill, fetchInsightExpenseTotal } = await import('../api/insights')
+    vi.mocked(fetchInsightExpenseTotal).mockResolvedValue([])
     vi.mocked(fetchExpenseNoBill).mockResolvedValue([])
     const { fetchBills } = await import('../api/bills')
     vi.mocked(fetchBills).mockResolvedValue(MOCK_BILLS)
@@ -269,7 +253,8 @@ describe('useForecast', () => {
     await setupConfigMock({ historyMonths: 3, model: 'weighted' })
     const { fetchCurrencies } = await import('../api/currencies')
     vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
-    const { fetchExpenseNoBill } = await import('../api/insights')
+    const { fetchExpenseNoBill, fetchInsightExpenseTotal } = await import('../api/insights')
+    vi.mocked(fetchInsightExpenseTotal).mockResolvedValue([])
     vi.mocked(fetchExpenseNoBill).mockResolvedValue([])
     const { fetchBills } = await import('../api/bills')
     vi.mocked(fetchBills).mockResolvedValue(MOCK_BILLS)
@@ -279,25 +264,28 @@ describe('useForecast', () => {
 
     const calls = vi.mocked(fetchExpenseNoBill).mock.calls
     const ranges = calls.map((c) => c[2])
-    // No call should query the full current month (that would double-count with MTD)
+    // No historical call should query the full current month
     expect(ranges).not.toContainEqual({ start: '2026-04-01', end: '2026-04-30' })
-    // MTD does query April but only up to today
-    expect(ranges).toContainEqual({ start: '2026-04-01', end: '2026-04-15' })
+    // MTD uses fetchInsightExpenseTotal — verify it's called with the correct range
+    const mtdCalls = vi.mocked(fetchInsightExpenseTotal).mock.calls
+    const mtdRanges = mtdCalls.map((c) => c[2])
+    expect(mtdRanges).toContainEqual({ start: '2026-04-01', end: '2026-04-15' })
   })
 
-  it('MTD query uses monthStart to todayISO as date range', async () => {
+  it('MTD query uses fetchInsightExpenseTotal with monthStart to todayISO', async () => {
     await setupConfigMock()
     const { fetchCurrencies } = await import('../api/currencies')
     vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
-    const { fetchExpenseNoBill } = await import('../api/insights')
+    const { fetchExpenseNoBill, fetchInsightExpenseTotal } = await import('../api/insights')
+    vi.mocked(fetchInsightExpenseTotal).mockResolvedValue(makeHistoryEntries(300))
     vi.mocked(fetchExpenseNoBill).mockResolvedValue(makeHistoryEntries(300))
     const { fetchBills } = await import('../api/bills')
     vi.mocked(fetchBills).mockResolvedValue(MOCK_BILLS)
 
     renderHook(() => useForecast(BASE_URL, TOKEN, TODAY), { wrapper: makeWrapper() })
-    await waitFor(() => expect(vi.mocked(fetchExpenseNoBill)).toHaveBeenCalled())
+    await waitFor(() => expect(vi.mocked(fetchInsightExpenseTotal)).toHaveBeenCalled())
 
-    const calls = vi.mocked(fetchExpenseNoBill).mock.calls
+    const calls = vi.mocked(fetchInsightExpenseTotal).mock.calls
     const ranges = calls.map((c) => c[2])
     // for today=2026-04-15: monthStart='2026-04-01', todayISO='2026-04-15'
     expect(ranges).toContainEqual({ start: '2026-04-01', end: '2026-04-15' })
@@ -307,7 +295,8 @@ describe('useForecast', () => {
     await setupConfigMock()
     const { fetchCurrencies } = await import('../api/currencies')
     vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
-    const { fetchExpenseNoBill } = await import('../api/insights')
+    const { fetchExpenseNoBill, fetchInsightExpenseTotal } = await import('../api/insights')
+    vi.mocked(fetchInsightExpenseTotal).mockResolvedValue(makeHistoryEntries(300))
     vi.mocked(fetchExpenseNoBill).mockResolvedValue(makeHistoryEntries(300))
     const { fetchBills } = await import('../api/bills')
     vi.mocked(fetchBills).mockResolvedValue(MOCK_BILLS)
@@ -356,14 +345,16 @@ describe('useForecast', () => {
     await setupConfigMock({ historyMonths: 6, model: 'simple' })
     const { fetchCurrencies } = await import('../api/currencies')
     vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
-    const { fetchExpenseNoBill } = await import('../api/insights')
+    const { fetchExpenseNoBill, fetchInsightExpenseTotal } = await import('../api/insights')
+    vi.mocked(fetchInsightExpenseTotal).mockResolvedValue(makeHistoryEntries(500))
     vi.mocked(fetchExpenseNoBill).mockResolvedValue(makeHistoryEntries(300))
     const { fetchBills } = await import('../api/bills')
     vi.mocked(fetchBills).mockResolvedValue(MOCK_BILLS)
 
     renderHook(() => useForecast(BASE_URL, TOKEN, TODAY), { wrapper: makeWrapper() })
-    // 6 historical months + 1 MTD = 7 total fetchExpenseNoBill calls
-    await waitFor(() => expect(vi.mocked(fetchExpenseNoBill)).toHaveBeenCalledTimes(7))
+    // 6 historical months via fetchExpenseNoBill + 1 MTD via fetchInsightExpenseTotal
+    await waitFor(() => expect(vi.mocked(fetchExpenseNoBill)).toHaveBeenCalledTimes(6))
+    expect(vi.mocked(fetchInsightExpenseTotal)).toHaveBeenCalledTimes(1)
   })
 
   it('changing historyMonths from 3 to 6 mid-mount re-computes with 6 historicalQueries', async () => {
@@ -372,7 +363,8 @@ describe('useForecast', () => {
     await setupConfigMock({ historyMonths: 3, model: 'weighted' })
     const { fetchCurrencies } = await import('../api/currencies')
     vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
-    const { fetchExpenseNoBill } = await import('../api/insights')
+    const { fetchExpenseNoBill, fetchInsightExpenseTotal } = await import('../api/insights')
+    vi.mocked(fetchInsightExpenseTotal).mockResolvedValue(makeHistoryEntries(500))
     vi.mocked(fetchExpenseNoBill).mockResolvedValue(makeHistoryEntries(300))
     const { fetchBills } = await import('../api/bills')
     vi.mocked(fetchBills).mockResolvedValue(MOCK_BILLS)
@@ -410,7 +402,8 @@ describe('useForecast', () => {
     await setupConfigMock()
     const { fetchCurrencies } = await import('../api/currencies')
     vi.mocked(fetchCurrencies).mockResolvedValue([EUR_CURRENCY])
-    const { fetchExpenseNoBill } = await import('../api/insights')
+    const { fetchExpenseNoBill, fetchInsightExpenseTotal } = await import('../api/insights')
+    vi.mocked(fetchInsightExpenseTotal).mockResolvedValue(makeHistoryEntries(500))
     vi.mocked(fetchExpenseNoBill).mockResolvedValue(makeHistoryEntries(300))
     const { fetchBills } = await import('../api/bills')
     vi.mocked(fetchBills).mockResolvedValue(MOCK_BILLS)
