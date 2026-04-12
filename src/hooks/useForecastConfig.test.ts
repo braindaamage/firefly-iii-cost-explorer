@@ -23,9 +23,14 @@ function makeWrapper() {
 }
 
 describe('useForecastConfig', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     localStorage.clear()
+    // Default putPreference to a resolved Promise so the auto-create effect
+    // (which fires when query.data === null) doesn't throw on tests that don't
+    // explicitly configure putPreference.
+    const { putPreference } = await import('../api/preferences')
+    vi.mocked(putPreference).mockResolvedValue(undefined)
   })
 
   it('mount with GET 404 → defaults, source="default", status="success"', async () => {
@@ -224,6 +229,51 @@ describe('useForecastConfig', () => {
       wrapper: makeWrapper(),
     })
     expect(result.current.status).toBe('loading')
+    expect(result.current.config).toEqual(DEFAULTS)
+    expect(result.current.source).toBe('default')
+  })
+
+  it('auto-creates preference when GET returns null (404)', async () => {
+    const { getPreference, putPreference } = await import('../api/preferences')
+    vi.mocked(getPreference).mockResolvedValue(null)
+    vi.mocked(putPreference).mockResolvedValue(undefined)
+
+    const { result } = renderHook(() => useForecastConfig(BASE_URL, TOKEN), {
+      wrapper: makeWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.status).toBe('success'))
+    await waitFor(() =>
+      expect(vi.mocked(putPreference)).toHaveBeenCalledWith(
+        BASE_URL, TOKEN, 'costExplorer.forecast', DEFAULTS
+      )
+    )
+  })
+
+  it('does not auto-create when preference already exists', async () => {
+    const { getPreference, putPreference } = await import('../api/preferences')
+    const remoteConfig: ForecastConfig = { historyMonths: 6, model: 'simple' }
+    vi.mocked(getPreference).mockResolvedValue(remoteConfig)
+    vi.mocked(putPreference).mockResolvedValue(undefined)
+
+    const { result } = renderHook(() => useForecastConfig(BASE_URL, TOKEN), {
+      wrapper: makeWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.status).toBe('success'))
+    expect(vi.mocked(putPreference)).not.toHaveBeenCalled()
+  })
+
+  it('auto-create failure is silent (no error state)', async () => {
+    const { getPreference, putPreference } = await import('../api/preferences')
+    vi.mocked(getPreference).mockResolvedValue(null)
+    vi.mocked(putPreference).mockRejectedValue(new Error('Server error'))
+
+    const { result } = renderHook(() => useForecastConfig(BASE_URL, TOKEN), {
+      wrapper: makeWrapper(),
+    })
+
+    await waitFor(() => expect(result.current.status).toBe('success'))
     expect(result.current.config).toEqual(DEFAULTS)
     expect(result.current.source).toBe('default')
   })

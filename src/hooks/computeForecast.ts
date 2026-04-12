@@ -162,7 +162,7 @@ export function computeForecast(inputs: ComputeForecastInputs): ForecastResult {
         ...dateInfo,
         weightedAvgDaily: null,
         historyMonthsUsed: 0,
-        pendingBills: billsQuery.status === 'success' ? buildPendingBills(billsQuery.data ?? [], today) : [],
+        pendingBills: billsQuery.status === 'success' ? buildPendingBills(billsQuery.data ?? [], today, currency.code) : [],
       },
     }
   }
@@ -177,7 +177,9 @@ export function computeForecast(inputs: ComputeForecastInputs): ForecastResult {
     if (dim <= 0) continue // defensive: skip degenerate month
     // Sum absolute expense for entries in primary currency
     const matching = entries.filter((e) => e.currency_code === currency.code)
-    if (matching.length === 0) continue // no data in primary currency — exclude this month
+    // Skip only if data exists in other currencies but not in primary.
+    // An empty entries array means zero spending — a valid data point (dailyRate = 0).
+    if (matching.length === 0 && entries.length > 0) continue
     const variableSpend = matching.reduce((sum, e) => sum + Math.abs(e.difference_float), 0)
     validDailyRates.push(variableSpend / dim)
   }
@@ -199,7 +201,7 @@ export function computeForecast(inputs: ComputeForecastInputs): ForecastResult {
   let billsForecast: number | null = null
 
   if (billsQuery.status === 'success' && billsQuery.data !== null) {
-    pendingBills = buildPendingBills(billsQuery.data, today)
+    pendingBills = buildPendingBills(billsQuery.data, today, currency.code)
     billsForecast = pendingBills.reduce((sum, b) => sum + b.amount, 0)
   }
 
@@ -265,7 +267,7 @@ export function computeForecast(inputs: ComputeForecastInputs): ForecastResult {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-function buildPendingBills(bills: Bill[], today: Date): PendingBill[] {
+function buildPendingBills(bills: Bill[], today: Date, primaryCurrencyCode: string): PendingBill[] {
   const todayStr = formatDate(today)
   const endOfMonthStr = formatDate(new Date(today.getFullYear(), today.getMonth() + 1, 0))
   const result: PendingBill[] = []
@@ -278,9 +280,20 @@ function buildPendingBills(bills: Bill[], today: Date): PendingBill[] {
       if (payDate > endOfMonthStr) continue
       // Exclude if already paid on that exact date
       if (bill.paidDates.some((pd) => pd.date === payDate)) continue
-      // Prefer pcAmountAvg (primary currency); fall back to amountAvg if null
-      // (fallback assumes amountAvg is in primary currency — a best-effort approximation)
-      const amount = bill.pcAmountAvg !== null ? bill.pcAmountAvg : bill.amountAvg
+      let amount: number
+      if (bill.pcAmountAvg !== null) {
+        amount = bill.pcAmountAvg
+      } else if (bill.currencyCode === primaryCurrencyCode) {
+        amount = bill.amountAvg
+      } else {
+        // Cross-currency bill without primary-currency conversion — skip to avoid
+        // silently summing foreign-currency amounts as primary.
+        console.warn(
+          `[buildPendingBills] Skipping bill "${bill.name}" (${bill.currencyCode}): ` +
+          `pcAmountAvg is null and currency differs from primary (${primaryCurrencyCode})`
+        )
+        continue
+      }
       result.push({ id: bill.id, name: bill.name, amount, date: payDate })
     }
   }

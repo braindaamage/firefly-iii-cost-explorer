@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { computeForecast } from './computeForecast'
 import type {
   ComputeForecastInputs,
@@ -493,6 +493,34 @@ describe('computeForecast — weightedAvgDaily calculation', () => {
     )
     expect(result.breakdown.historyMonthsUsed).toBe(2)
   })
+
+  it('history month with zero spending (empty entries) counts as valid zero', () => {
+    const zeroMonth = success({ entries: [], daysInMonth: 31 })
+    const result = computeForecast(
+      makeInputs({
+        config: { historyMonths: 1, model: 'simple' },
+        historicalQueries: [zeroMonth],
+      })
+    )
+    expect(result.breakdown.historyMonthsUsed).toBe(1)
+    expect(result.breakdown.weightedAvgDaily).toBeCloseTo(0, 8)
+    expect(result.status).toBe('ok')
+  })
+
+  it('mixed: one zero month + one normal month — both count toward historyMonthsUsed', () => {
+    const zeroMonth = success({ entries: [], daysInMonth: 31 })
+    // zeroMonth contributes dailyRate=0, MARCH contributes 620/31
+    const result = computeForecast(
+      makeInputs({
+        config: { historyMonths: 2, model: 'simple' },
+        historicalQueries: [zeroMonth, MARCH],
+      })
+    )
+    expect(result.breakdown.historyMonthsUsed).toBe(2)
+    // simple average of [0, 620/31]
+    expect(result.breakdown.weightedAvgDaily).toBeCloseTo((0 + 620 / 31) / 2, 8)
+    expect(result.status).toBe('ok')
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -560,6 +588,23 @@ describe('computeForecast — bill filtering', () => {
     const bill = makeBill({ pcAmountAvg: null, amountAvg: 12.99 })
     const result = computeForecast(makeInputs({ billsQuery: success([bill]) }))
     expect(result.breakdown.pendingBills[0].amount).toBeCloseTo(12.99, 5)
+  })
+
+  it('bill with pcAmountAvg=null and same currency as primary uses amountAvg', () => {
+    const bill = makeBill({ pcAmountAvg: null, amountAvg: 12.99, currencyCode: 'EUR' })
+    const result = computeForecast(makeInputs({ billsQuery: success([bill]) }))
+    expect(result.breakdown.pendingBills).toHaveLength(1)
+    expect(result.breakdown.pendingBills[0].amount).toBeCloseTo(12.99, 5)
+  })
+
+  it('bill with pcAmountAvg=null and different currency is skipped', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const usdBill = makeBill({ pcAmountAvg: null, amountAvg: 12.99, currencyCode: 'USD' })
+    const result = computeForecast(makeInputs({ billsQuery: success([usdBill]) }))
+    expect(result.breakdown.pendingBills).toEqual([])
+    expect(result.billsForecast).toBe(0)
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('USD'))
+    warnSpy.mockRestore()
   })
 })
 

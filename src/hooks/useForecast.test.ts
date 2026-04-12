@@ -189,7 +189,10 @@ describe('useForecast', () => {
     const { fetchBills } = await import('../api/bills')
     vi.mocked(fetchBills).mockRejectedValue(new Error('bills unavailable'))
     const { fetchExpenseNoBill } = await import('../api/insights')
-    vi.mocked(fetchExpenseNoBill).mockResolvedValue([]) // empty → historyMonthsUsed = 0
+    vi.mocked(fetchExpenseNoBill).mockResolvedValue([
+      // Non-primary currency entries → no matching EUR data → historyMonthsUsed = 0
+      { id: '1', name: 'USD spend', difference: '-500.00', difference_float: -500, currency_id: '2', currency_code: 'USD', currency_symbol: '$' },
+    ])
 
     const { result } = renderHook(() => useForecast(BASE_URL, TOKEN, TODAY), {
       wrapper: makeWrapper(),
