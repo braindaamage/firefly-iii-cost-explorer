@@ -34,6 +34,7 @@ export function ForecastOverlay({ forecastData, barCategoryGap = 0 }: ForecastOv
 
   // Adjust for barCategoryGap: Recharts insets bars by barCategoryGap on each side.
   const barWidth = bandwidth - 2 * barCategoryGap
+  if (barWidth <= 0) return null
   const xOffset = barCategoryGap
 
   const baseline = yScale(0) ?? 0
