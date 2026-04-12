@@ -58,7 +58,7 @@ export interface ComputeForecastInputs {
    */
   historicalQueries: ForecastQueryState<{ entries: ExpenseNoBillEntry[]; daysInMonth: number }>[]
 
-  /** MTD spend from /summary/basic for the current month. */
+  /** MTD spend from /insight/expense/no-bill for the current month. */
   mtdQuery: ForecastQueryState<{ amount: number; currencyCode: string }>
 
   /** Bills from /bills?start=tomorrow&end=endOfMonth. */

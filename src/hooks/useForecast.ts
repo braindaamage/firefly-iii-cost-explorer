@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 import { useQuery, useQueries } from '@tanstack/react-query'
 import { fetchCurrencies, findPrimary, findEnabledSecondaries } from '../api/currencies'
 import { fetchExpenseNoBill } from '../api/insights'
-import { fetchSummaryBasic } from '../api/summary'
 import { fetchBills } from '../api/bills'
 import { computeForecast } from './computeForecast'
 import { useForecastConfig } from './useForecastConfig'
@@ -72,15 +71,24 @@ export function useForecast(
     })),
   })
 
-  // --- MTD spend ---
+  // --- MTD spend via no-bill insight (same data source as Cost Breakdown) ---
   const mtdQuery = useQuery({
-    queryKey: ['forecast', 'mtd', baseUrl, primary?.code ?? '', monthStart, todayISO],
-    queryFn: () =>
-      fetchSummaryBasic(baseUrl, token, {
+    queryKey: ['forecast', 'mtd', baseUrl, monthStart, todayISO],
+    queryFn: async () => {
+      const entries = await fetchExpenseNoBill(baseUrl, token, {
         start: monthStart,
         end: todayISO,
-        currencyCode: primary!.code,
-      }),
+      })
+      // All insight entries are returned in primary currency server-side.
+      // Sum primary-currency entries; skip any foreign entries (conservative).
+      const amount = entries.reduce((sum, e) => {
+        if (e.currency_code === primary!.code) {
+          return sum + Math.abs(e.difference_float)
+        }
+        return sum
+      }, 0)
+      return { amount, currencyCode: primary!.code }
+    },
     staleTime: 5 * 60_000,
     enabled: enabled && !!primary,
   })
