@@ -90,3 +90,15 @@ export async function fetchExpenseNoBill(
   q.set('end', params.end)
   return client.fetch<InsightEntry[]>(`/insight/expense/no-bill?${q.toString()}`)
 }
+
+export async function fetchInsightExpenseTotal(
+  baseUrl: string,
+  token: string,
+  params: { start: string; end: string }
+): Promise<InsightEntry[]> {
+  const client = createApiClient(baseUrl, token)
+  const q = new URLSearchParams()
+  q.set('start', params.start)
+  q.set('end', params.end)
+  return client.fetch<InsightEntry[]>(`/insight/expense/total?${q.toString()}`)
+}

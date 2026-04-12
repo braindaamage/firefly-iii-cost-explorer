@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useQuery, useQueries } from '@tanstack/react-query'
 import { fetchCurrencies, findPrimary, findEnabledSecondaries } from '../api/currencies'
-import { fetchExpenseNoBill } from '../api/insights'
+import { fetchExpenseNoBill, fetchInsightExpenseTotal } from '../api/insights'
 import { fetchBills } from '../api/bills'
 import { computeForecast } from './computeForecast'
 import { useForecastConfig } from './useForecastConfig'
@@ -71,15 +71,15 @@ export function useForecast(
     })),
   })
 
-  // --- MTD spend via no-bill insight (same data source as Cost Breakdown) ---
+  // --- MTD spend via total expense insight (includes bill-related expenses) ---
   const mtdQuery = useQuery({
     queryKey: ['forecast', 'mtd', baseUrl, primary?.code, monthStart, todayISO],
     queryFn: async () => {
-      const entries = await fetchExpenseNoBill(baseUrl, token, {
+      const entries = await fetchInsightExpenseTotal(baseUrl, token, {
         start: monthStart,
         end: todayISO,
       })
-      // /insight/expense/no-bill returns entries in native currency.
+      // /insight/expense/total returns entries in native currency.
       // Sum primary-currency entries directly; convert foreign entries
       // via exchange rates (same logic as computeForecast Step 4).
       const rates = exchangeRates
