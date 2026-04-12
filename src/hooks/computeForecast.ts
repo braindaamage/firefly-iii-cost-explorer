@@ -63,6 +63,13 @@ export interface ComputeForecastInputs {
 
   /** Bills from /bills?start=tomorrow&end=endOfMonth. */
   billsQuery: ForecastQueryState<Bill[]>
+
+  /**
+   * Exchange rates: foreign_code → factor_to_multiply_to_get_primary.
+   * Example: { 'USD': 0.853 } means 1 USD = 0.853 EUR.
+   * If undefined or empty, only primary-currency entries are used (backward compatible).
+   */
+  exchangeRates?: Record<string, number>
 }
 
 export interface ForecastResult {
@@ -171,16 +178,33 @@ export function computeForecast(inputs: ComputeForecastInputs): ForecastResult {
 
   // --- Step 4: compute valid history months ---
   const validDailyRates: number[] = []
+  const rates = inputs.exchangeRates ?? {}
+
   for (const query of historicalQueries) {
     if (query.status !== 'success' || query.data === null) continue
     const { entries, daysInMonth: dim } = query.data
     if (dim <= 0) continue // defensive: skip degenerate month
-    // Sum absolute expense for entries in primary currency
-    const matching = entries.filter((e) => e.currency_code === currency.code)
-    // Skip only if data exists in other currencies but not in primary.
-    // An empty entries array means zero spending — a valid data point (dailyRate = 0).
-    if (matching.length === 0 && entries.length > 0) continue
-    const variableSpend = matching.reduce((sum, e) => sum + Math.abs(e.difference_float), 0)
+
+    let variableSpend = 0
+    let hasAnyData = false
+
+    for (const e of entries) {
+      if (e.currency_code === currency.code) {
+        variableSpend += Math.abs(e.difference_float)
+        hasAnyData = true
+      } else {
+        const rate = rates[e.currency_code]
+        if (rate != null) {
+          variableSpend += Math.abs(e.difference_float) * rate
+          hasAnyData = true
+        }
+        // No rate for this currency — skip (conservative: don't sum unconverted amount)
+      }
+    }
+
+    // Skip month only if entries exist but none could be processed
+    if (!hasAnyData && entries.length > 0) continue
+
     validDailyRates.push(variableSpend / dim)
   }
 
