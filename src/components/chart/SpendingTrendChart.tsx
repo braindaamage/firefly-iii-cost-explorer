@@ -232,7 +232,7 @@ export function SpendingTrendChart({
             cursor={{ fill: 'rgba(255,255,255,0.04)' }}
           />
           {forecastOverlay && !cumulative && (
-            <ForecastOverlay forecastData={forecastOverlay} />
+            <ForecastOverlay forecastData={forecastOverlay} barCategoryGap={8} />
           )}
           {series.map((s, i) => (
             <Bar
