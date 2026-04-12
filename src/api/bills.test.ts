@@ -248,4 +248,58 @@ describe('fetchBills', () => {
       fetchBills(BASE_URL, TOKEN, { start: '2026-04-12', end: '2026-04-30' })
     ).rejects.toThrow()
   })
+
+  it('normalizes pay_dates from Firefly ISO8601 datetime to YYYY-MM-DD', async () => {
+    const billWithDatetimePayDates = {
+      ...baseBillRaw,
+      attributes: {
+        ...baseBillRaw.attributes,
+        pay_dates: ['2026-04-15T00:00:00+00:00', '2026-05-15T00:00:00+00:00'],
+      },
+    }
+    mockFetchOk(mockPaginatedResponse([billWithDatetimePayDates]))
+    const result = await fetchBills(BASE_URL, TOKEN, { start: '2026-04-12', end: '2026-04-30' })
+    expect(result[0].payDates).toEqual(['2026-04-15', '2026-05-15'])
+  })
+
+  it('normalizes paid_dates[].date from Firefly ISO8601 datetime to YYYY-MM-DD', async () => {
+    const billWithDatetimePaidDates = {
+      ...baseBillRaw,
+      attributes: {
+        ...baseBillRaw.attributes,
+        paid_dates: [
+          { date: '2026-04-11T00:00:00+00:00', transaction_journal_id: '5', transaction_group_id: '5' },
+        ],
+      },
+    }
+    mockFetchOk(mockPaginatedResponse([billWithDatetimePaidDates]))
+    const result = await fetchBills(BASE_URL, TOKEN, { start: '2026-04-12', end: '2026-04-30' })
+    expect(result[0].paidDates[0].date).toBe('2026-04-11')
+  })
+
+  it('normalizes last-day-of-month pay_date (regression: end-of-month datetime would lexically exceed YYYY-MM-DD)', async () => {
+    const billWithEndOfMonthDatetime = {
+      ...baseBillRaw,
+      attributes: {
+        ...baseBillRaw.attributes,
+        pay_dates: ['2026-04-30T00:00:00+00:00'],
+      },
+    }
+    mockFetchOk(mockPaginatedResponse([billWithEndOfMonthDatetime]))
+    const result = await fetchBills(BASE_URL, TOKEN, { start: '2026-04-12', end: '2026-04-30' })
+    expect(result[0].payDates).toEqual(['2026-04-30'])
+  })
+
+  it('normalization is idempotent for already-plain YYYY-MM-DD input', async () => {
+    const billWithPlainDates = {
+      ...baseBillRaw,
+      attributes: {
+        ...baseBillRaw.attributes,
+        pay_dates: ['2026-04-15'],
+      },
+    }
+    mockFetchOk(mockPaginatedResponse([billWithPlainDates]))
+    const result = await fetchBills(BASE_URL, TOKEN, { start: '2026-04-12', end: '2026-04-30' })
+    expect(result[0].payDates).toEqual(['2026-04-15'])
+  })
 })

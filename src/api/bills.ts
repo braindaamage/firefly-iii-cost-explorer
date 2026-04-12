@@ -32,8 +32,21 @@ export interface Bill {
   pcAmountMin: number | null
   pcAmountMax: number | null
   pcAmountAvg: number | null
+  // YYYY-MM-DD (normalized from Firefly ISO8601 at fetch time)
   payDates: string[]
+  // YYYY-MM-DD (normalized from Firefly ISO8601 at fetch time)
   paidDates: { date: string; transactionJournalId: string; transactionGroupId: string }[]
+}
+
+/**
+ * Firefly III 6.5.9 returns pay_dates / paid_dates[].date as ISO8601 datetime
+ * strings with time + TZ suffix (e.g. "2026-04-15T00:00:00+00:00"). All
+ * downstream code (computeForecast string comparisons, display in ForecastCard)
+ * assumes the Bill contract exposes plain YYYY-MM-DD, so we normalize here at
+ * the parser boundary. Accepts both "YYYY-MM-DD" and "YYYY-MM-DDT...".
+ */
+function normalizeDateString(s: string): string {
+  return s.slice(0, 10)
 }
 
 function parseAmount(value: string | null): number | null {
@@ -69,9 +82,9 @@ export async function fetchBills(
     pcAmountMin: parseAmount(item.attributes.pc_amount_min),
     pcAmountMax: parseAmount(item.attributes.pc_amount_max),
     pcAmountAvg: parseAmount(item.attributes.pc_amount_avg),
-    payDates: item.attributes.pay_dates,
+    payDates: item.attributes.pay_dates.map(normalizeDateString),
     paidDates: item.attributes.paid_dates.map((pd) => ({
-      date: pd.date,
+      date: normalizeDateString(pd.date),
       transactionJournalId: pd.transaction_journal_id,
       transactionGroupId: pd.transaction_group_id,
     })),

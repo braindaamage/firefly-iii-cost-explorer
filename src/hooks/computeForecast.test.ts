@@ -520,6 +520,7 @@ describe('computeForecast — bill filtering', () => {
   })
 
   it('last day of month payDate is included', () => {
+    // Input is the normalized Bill.payDates contract (YYYY-MM-DD). Normalization from Firefly ISO8601 datetime happens in bills.ts parser — see bills.test.ts for that boundary.
     const lastDayBill = makeBill({ payDates: ['2026-04-30'] })
     const result = computeForecast(makeInputs({ billsQuery: success([lastDayBill]) }))
     expect(result.breakdown.pendingBills).toHaveLength(1)
