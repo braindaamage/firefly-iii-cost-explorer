@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BreakdownTable } from '../BreakdownTable'
 import { useBreakpoint } from '../../../hooks/useBreakpoint'
@@ -249,7 +249,9 @@ describe('BreakdownTable — sticky first column', () => {
     setBreakpoint(bp)
     render(<BreakdownTable {...defaultProps} />)
     const th = screen.getAllByRole('columnheader')[0]
-    expect(th).toHaveStyle({ position: 'sticky', left: '0px', zIndex: '2' })
+    // zIndex 4 (Z_STICKY_CORNER): la esquina dejó de compartir estilo con stickyFirstCol al
+    // implementarse el header fijado — ver spec-sticky-header-row.md §5.3.
+    expect(th).toHaveStyle({ position: 'sticky', left: '0px', zIndex: '4' })
   })
 
   it.each(BREAKPOINTS)('first data cell is sticky on %s', (bp) => {
@@ -536,5 +538,145 @@ describe('BreakdownTable — desktop cell padding (H2)', () => {
   it('renders cells with desktop padding (12px 16px)', () => {
     render(<BreakdownTable {...defaultProps} />)
     expect(screen.getAllByRole('cell')[1]).toHaveStyle({ padding: '12px 16px' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Header fijado (sticky vertical) — spec-sticky-header-row.md §10.3 y §10.4
+// ---------------------------------------------------------------------------
+
+const HEADER_EDGE = 'inset 0 -1px 0 #3c4043'
+const COL_EDGE = 'inset -1px 0 0 #3c4043'
+
+/** El <thead>, la esquina y las primeras celdas de tbody/tfoot en un solo sitio. */
+function stickyParts(container: HTMLElement) {
+  return {
+    thead: container.querySelector('thead') as HTMLElement,
+    corner: screen.getAllByRole('columnheader')[0],
+    periodTh: screen.getAllByRole('columnheader')[1],
+    bodyCell: screen.getAllByRole('cell')[0],
+    footCell: container.querySelector('tfoot td') as HTMLElement,
+  }
+}
+
+describe('BreakdownTable — sticky header row', () => {
+  beforeEach(() => {
+    setBreakpoint('desktop')
+  })
+
+  it('posiciona el thead para que gane a la columna congelada del tbody', () => {
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    expect(stickyParts(container).thead).toHaveStyle({ position: 'relative', zIndex: '3' })
+  })
+
+  it('sube la esquina a 4 sin arrastrar a las celdas de tbody y tfoot', () => {
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    const { corner, bodyCell, footCell } = stickyParts(container)
+    expect(corner).toHaveStyle({ zIndex: '4' })
+    expect(bodyCell).toHaveStyle({ zIndex: '2' })
+    expect(footCell).toHaveStyle({ zIndex: '2' })
+  })
+
+  it('pinta la esquina con un color literal, no con var(--row-bg)', () => {
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    const { corner, bodyCell } = stickyParts(container)
+    expect(corner.style.backgroundColor).toBe('rgb(30, 30, 30)')
+    expect(corner.style.backgroundColor).not.toContain('var(')
+    // el tbody sí conserva la custom property: es lo que ilumina la fila en hover
+    expect(bodyCell.style.backgroundColor).toContain('var(--row-bg')
+  })
+
+  it('dibuja el borde inferior del header con boxShadow y no con borderBottom', () => {
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    const { periodTh } = stickyParts(container)
+    expect(periodTh.style.borderBottom).toBe('')
+    expect(periodTh.style.boxShadow).toContain(HEADER_EDGE)
+  })
+
+  it('compone en la esquina las dos insets: la del header y la de la columna', () => {
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    const { corner } = stickyParts(container)
+    expect(corner.style.boxShadow).toContain(HEADER_EDGE)
+    expect(corner.style.boxShadow).toContain(COL_EDGE)
+  })
+
+  it('añade la elevación a la esquina sin perder las dos insets', () => {
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    const wrapper = screen.getByTestId('breakdown-scroll')
+    Object.defineProperty(wrapper, 'scrollLeft', { value: 120, writable: true, configurable: true })
+    fireEvent.scroll(wrapper)
+
+    const { corner } = stickyParts(container)
+    expect(corner.style.boxShadow).toContain(HEADER_EDGE)
+    expect(corner.style.boxShadow).toContain(COL_EDGE)
+    expect(corner.style.boxShadow).toContain('rgba(0,0,0,0.5)')
+  })
+
+  it('no filtra la sombra inferior del header a las celdas del tbody', () => {
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    expect(stickyParts(container).bodyCell.style.boxShadow).not.toContain(HEADER_EDGE)
+  })
+
+  it('no declara top en ninguna parte: el mecanismo es transform, no position:sticky vertical', () => {
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    const { thead, corner, bodyCell, footCell } = stickyParts(container)
+    expect(thead.style.top).toBe('')
+    expect(corner.style.top).toBe('')
+    expect(bodyCell.style.top).toBe('')
+    expect(footCell.style.top).toBe('')
+  })
+
+  it.each(BREAKPOINTS)('aplica sin condición de breakpoint en %s', (bp) => {
+    setBreakpoint(bp)
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    const { thead, corner } = stickyParts(container)
+    expect(thead).toHaveStyle({ position: 'relative', zIndex: '3' })
+    expect(corner).toHaveStyle({ zIndex: '4' })
+  })
+
+  it.each(GROUP_BYS)('la esquina es sticky con zIndex 4 para groupBy=%s', (groupBy) => {
+    const { container } = render(<BreakdownTable {...defaultProps} groupBy={groupBy} />)
+    expect(stickyParts(container).corner).toHaveStyle({ position: 'sticky', zIndex: '4' })
+  })
+})
+
+describe('BreakdownTable — ciclo de vida del header fijado', () => {
+  beforeEach(() => {
+    setBreakpoint('desktop')
+  })
+
+  // jsdom no hace layout: todas las métricas son 0, así que el offset siempre es 0 y el thead
+  // nunca debe recibir atributo transform. Es el ancla del no-op de la spec §6.1.
+  it('no escribe transform en el thead cuando no hay nada que medir', async () => {
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    const thead = container.querySelector('thead') as HTMLElement
+    expect(thead.style.transform).toBe('')
+
+    fireEvent.scroll(window)
+    await act(() => new Promise<void>((r) => requestAnimationFrame(() => r())))
+
+    expect(thead.style.transform).toBe('')
+  })
+
+  it('limpia listeners y rAF al desmontar', () => {
+    const { unmount } = render(<BreakdownTable {...defaultProps} />)
+    unmount()
+    expect(() => {
+      fireEvent.scroll(window)
+      fireEvent.resize(window)
+    }).not.toThrow()
+  })
+
+  it('reinstala el efecto al volver del skeleton sin dejar el observer anterior colgado', async () => {
+    const { rerender, container } = render(<BreakdownTable {...defaultProps} isLoading={true} />)
+    expect(container.querySelector('table')).toBeNull()
+
+    rerender(<BreakdownTable {...defaultProps} isLoading={false} />)
+
+    const thead = container.querySelector('thead') as HTMLElement
+    expect(thead).not.toBeNull()
+    fireEvent.scroll(window)
+    await act(() => new Promise<void>((r) => requestAnimationFrame(() => r())))
+    expect(thead.style.transform).toBe('')
   })
 })
