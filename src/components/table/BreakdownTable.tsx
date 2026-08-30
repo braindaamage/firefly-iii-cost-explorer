@@ -1,4 +1,4 @@
-import { useState, useMemo, Fragment } from 'react'
+import { useState, useMemo, useRef, useEffect, Fragment } from 'react'
 import { SortableHeader } from './SortableHeader'
 import { formatCurrency } from '../../lib/formatters'
 import { useBreakpoint } from '../../hooks/useBreakpoint'
@@ -12,6 +12,8 @@ const SURFACE = '#1e1e1e' // superficie de card / celda sticky en reposo
 const SURFACE_HOVER = '#2d2d2d' // fila hovered
 const SURFACE_FOOTER = '#1a1a1a' // equivalente opaco de rgba(18,18,18,0.3) sobre SURFACE
 const BORDER = '#3c4043'
+const DIVIDER = '#2d2d2d' // separador entre filas y bloque de skeleton (mismo valor que
+                          // SURFACE_HOVER, pero es otra cosa: no lo reutilices por coincidir)
 
 // Escala de stacking dentro de la tabla:
 //   2 -> celdas sticky de la primera columna (thead + tbody + tfoot)
@@ -66,7 +68,7 @@ function SkeletonRows() {
             height: '44px',
             margin: '4px 16px',
             borderRadius: '4px',
-            backgroundColor: '#2d2d2d',
+            backgroundColor: DIVIDER,
             animation: 'pulse 1.5s ease-in-out infinite',
             animationDelay: `${i * 0.1}s`,
           }}
@@ -98,6 +100,16 @@ export function BreakdownTable({
   const [sortKey, setSortKey] = useState<SortKey>('total')
   const [sortDir, setSortDir] = useState<SortDirection>('desc')
   const [isScrolled, setIsScrolled] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // El div de scroll se desmonta al entrar en loading o en el estado vacío, pero isScrolled es
+  // estado del padre y sobrevive: al remontar quedaría la elevación pintada sin nada oculto
+  // detrás, y ningún onScroll la corrige. Se deriva del nodo real en vez de asumir 0, para
+  // cubrir también los cambios de periods que no pasan por loading (caché caliente).
+  const showTable = !isLoading && rows.length > 0
+  useEffect(() => {
+    setIsScrolled((scrollRef.current?.scrollLeft ?? 0) > 0)
+  }, [showTable, periods.length, breakpoint])
 
   function handleSort(key: SortKey) {
     return (next: SortDirection) => {
@@ -254,6 +266,7 @@ export function BreakdownTable({
         </div>
       ) : (
         <div
+          ref={scrollRef}
           data-testid="breakdown-scroll"
           style={{ overflowX: 'auto' }}
           onScroll={(e) => setIsScrolled(e.currentTarget.scrollLeft > 0)}
@@ -300,7 +313,10 @@ export function BreakdownTable({
                     onClick={() => onRowClick(row)}
                     style={{
                       cursor: 'pointer',
-                      borderBottom: '1px solid #2d2d2d',
+                      borderBottom: `1px solid ${DIVIDER}`,
+                      // La celda congelada hereda la transition de cellStyle y hace fade de 150ms.
+                      // Sin esto el resto de la fila cambia de golpe y la primera columna llega tarde.
+                      transition: 'background-color 150ms ease',
                     }}
                     onMouseEnter={(e) => {
                       // --row-bg hereda por DOM hasta la celda sticky, que es opaca y de otro

@@ -9,6 +9,13 @@ vi.mock('../../../hooks/useBreakpoint', () => ({
   useBreakpoint: vi.fn(() => 'desktop'),
 }))
 
+// El mock se setea con mockReturnValue en varios describes y vitest.config.ts no declara
+// restoreMocks/clearMocks: sin este reset el breakpoint se filtraría entre bloques según el
+// orden de ejecución. Corre antes que los beforeEach de cada describe, que lo sobrescriben.
+beforeEach(() => {
+  vi.mocked(useBreakpoint).mockReturnValue('desktop')
+})
+
 const periods = ['Jan 2026', 'Feb 2026', 'Mar 2026']
 
 const rows: BreakdownRow[] = [
@@ -217,7 +224,9 @@ const FIRST_COL_CONTENT: Record<(typeof BREAKPOINTS)[number], string> = {
 }
 
 const LONG_NAME = 'Supermercado y Compras del Hogar Mensuales Recurrentes de la Familia'
-const LONG_NAME_NOSPACE = 'https://facturacion.proveedor-electricidad.example.com/id'
+// 62 alfanuméricos continuos: sin `/`, `.` ni `-`, que son oportunidades de corte estándar.
+// Una URL partiría incluso sin `overflow-wrap: anywhere`, así que no sirve como peor caso.
+const LONG_NAME_NOSPACE = 'Cuenta7fGh2Kp9Lm4Qr8Tv3Xz6Bd1Nj5Ws0Yc2Ae4Gi7Ko9Mu3Pq6Sx8Uz1Rt5'
 
 function setBreakpoint(bp: (typeof BREAKPOINTS)[number]) {
   vi.mocked(useBreakpoint).mockReturnValue(bp)
@@ -428,5 +437,100 @@ describe('BreakdownTable — sticky across groupBy variants', () => {
     render(<BreakdownTable {...defaultProps} groupBy={groupBy} />)
     expect(screen.getAllByRole('columnheader')[0]).toHaveStyle({ position: 'sticky' })
     expect(firstColParts().td).toHaveStyle({ position: 'sticky' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests añadidos tras el code review (spec §10.1.1)
+// ---------------------------------------------------------------------------
+
+/** Fuerza scrollLeft en jsdom, que no hace layout y nunca lo actualiza solo. */
+function setScrollLeft(el: HTMLElement, value: number) {
+  Object.defineProperty(el, 'scrollLeft', { value, writable: true, configurable: true })
+}
+
+const ELEVATION = 'rgba(0,0,0,0.5)'
+
+describe('BreakdownTable — isScrolled no sobrevive al remontaje (H1)', () => {
+  beforeEach(() => {
+    setBreakpoint('desktop')
+  })
+
+  it('limpia la elevación cuando la tabla se remonta tras isLoading', () => {
+    const { rerender } = render(<BreakdownTable {...defaultProps} />)
+    const wrapper = screen.getByTestId('breakdown-scroll')
+    setScrollLeft(wrapper, 200)
+    fireEvent.scroll(wrapper)
+    expect(firstColParts().td.style.boxShadow).toContain(ELEVATION)
+
+    rerender(<BreakdownTable {...defaultProps} isLoading={true} />)
+    expect(screen.queryByTestId('breakdown-scroll')).toBeNull()
+
+    rerender(<BreakdownTable {...defaultProps} isLoading={false} />)
+    expect(firstColParts().td.style.boxShadow).not.toContain(ELEVATION)
+  })
+
+  it('limpia la elevación cuando la tabla se remonta tras quedarse sin filas', () => {
+    const { rerender } = render(<BreakdownTable {...defaultProps} />)
+    const wrapper = screen.getByTestId('breakdown-scroll')
+    setScrollLeft(wrapper, 200)
+    fireEvent.scroll(wrapper)
+    expect(firstColParts().td.style.boxShadow).toContain(ELEVATION)
+
+    rerender(<BreakdownTable {...defaultProps} rows={[]} />)
+    expect(screen.queryByTestId('breakdown-scroll')).toBeNull()
+    // El estado vacío y el contenedor de scroll son ambos <div> host en la misma posición del
+    // árbol, así que React reutiliza el nodo DOM en vez de remontarlo. En un navegador real ese
+    // nodo deja de desbordar y scrollLeft se clampea a 0; jsdom no hace layout, así que lo
+    // simulamos. Sin el efecto de H1 la sombra seguiría pintada y este test fallaría igual.
+    setScrollLeft(wrapper, 0)
+
+    rerender(<BreakdownTable {...defaultProps} rows={rows} />)
+    expect(firstColParts().td.style.boxShadow).not.toContain(ELEVATION)
+  })
+
+  it('limpia la elevación al reducir periods sin pasar por isLoading (caché caliente)', () => {
+    const sixPeriods = ['Jan 2026', 'Feb 2026', 'Mar 2026', 'Apr 2026', 'May 2026', 'Jun 2026']
+    const { rerender } = render(<BreakdownTable {...defaultProps} periods={sixPeriods} />)
+    const wrapper = screen.getByTestId('breakdown-scroll')
+    setScrollLeft(wrapper, 200)
+    fireEvent.scroll(wrapper)
+    expect(firstColParts().td.style.boxShadow).toContain(ELEVATION)
+
+    // El navegador clampea scrollLeft a 0 al dejar de haber desbordamiento; jsdom no hace
+    // layout, así que lo simulamos. No se dispara ningún evento scroll a propósito: el efecto
+    // debe leer el nodo real, no depender de que llegue el evento.
+    setScrollLeft(wrapper, 0)
+    rerender(<BreakdownTable {...defaultProps} periods={periods} />)
+    expect(screen.getByTestId('breakdown-scroll')).toBe(wrapper) // mismo nodo, no hubo remontaje
+    expect(firstColParts().td.style.boxShadow).not.toContain(ELEVATION)
+  })
+})
+
+describe('BreakdownTable — criterio 10: sin minWidth con pocos periodos', () => {
+  beforeEach(() => {
+    setBreakpoint('desktop')
+  })
+
+  it('no fija minWidth en la tabla cuando hay 3 periodos o menos', () => {
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    expect(container.querySelector('table')!.style.minWidth).toBe('')
+  })
+
+  it('fija minWidth en cuanto hay más de 3 periodos', () => {
+    const four = ['Jan 2026', 'Feb 2026', 'Mar 2026', 'Apr 2026']
+    const { container } = render(<BreakdownTable {...defaultProps} periods={four} />)
+    expect(container.querySelector('table')!.style.minWidth).toBe('940px')
+  })
+})
+
+describe('BreakdownTable — desktop cell padding (H2)', () => {
+  beforeEach(() => {
+    setBreakpoint('desktop')
+  })
+
+  it('renders cells with desktop padding (12px 16px)', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    expect(screen.getAllByRole('cell')[1]).toHaveStyle({ padding: '12px 16px' })
   })
 })
