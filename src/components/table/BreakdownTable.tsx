@@ -6,6 +6,27 @@ import type { SortDirection } from './SortableHeader'
 import type { BreakdownRow } from '../../types/breakdown'
 import type { GroupBy } from '../../types/filters'
 
+type Breakpoint = ReturnType<typeof useBreakpoint>
+
+const SURFACE = '#1e1e1e' // superficie de card / celda sticky en reposo
+const SURFACE_HOVER = '#2d2d2d' // fila hovered
+const SURFACE_FOOTER = '#1a1a1a' // equivalente opaco de rgba(18,18,18,0.3) sobre SURFACE
+const BORDER = '#3c4043'
+
+// Escala de stacking dentro de la tabla:
+//   2 -> celdas sticky de la primera columna (thead + tbody + tfoot)
+//   3 -> fila de header sticky (thead) -- no implementada hoy
+//   4 -> celda esquina (th de la primera columna, sticky en ambos ejes) -- no implementada hoy
+// Toda la escala queda por debajo del 10 que usan DashboardPage y RatesSidecarSection.
+const Z_STICKY_COL = 2
+
+// Ancho de la primera columna (congelada) y padding de celda: única fuente de verdad.
+// El piso (minWidth del th) y el techo (maxWidth del contenido) derivan del mismo número,
+// por lo que la columna no se ensancha con nombres largos: el texto envuelve.
+const FIRST_COL_PX: Record<Breakpoint, number> = { mobile: 140, tablet: 160, desktop: 220 }
+const CELL_PADDING_X: Record<Breakpoint, number> = { mobile: 10, tablet: 14, desktop: 16 }
+const CELL_PADDING_Y: Record<Breakpoint, number> = { mobile: 8, tablet: 10, desktop: 12 }
+
 const GROUP_TITLES: Record<GroupBy, string> = {
   category: 'Category Breakdown',
   budget: 'Budget Breakdown',
@@ -73,10 +94,10 @@ export function BreakdownTable({
   onExportCSV,
 }: BreakdownTableProps) {
   const breakpoint = useBreakpoint()
-  const isMobileOrTablet = breakpoint === 'mobile' || breakpoint === 'tablet'
 
   const [sortKey, setSortKey] = useState<SortKey>('total')
   const [sortDir, setSortDir] = useState<SortDirection>('desc')
+  const [isScrolled, setIsScrolled] = useState(false)
 
   function handleSort(key: SortKey) {
     return (next: SortDirection) => {
@@ -120,11 +141,16 @@ export function BreakdownTable({
     })
   }, [rows, sortKey, sortDir])
 
-  const cellPadding = breakpoint === 'mobile' ? '8px 10px' : breakpoint === 'tablet' ? '10px 14px' : '12px 16px'
+  const cellPadding = `${CELL_PADDING_Y[breakpoint]}px ${CELL_PADDING_X[breakpoint]}px`
   const cellFontSize = breakpoint === 'mobile' ? '12px' : '13px'
   const headerFontSize = breakpoint === 'mobile' ? '11px' : '12px'
   const minColWidth = breakpoint === 'mobile' ? '90px' : breakpoint === 'tablet' ? '100px' : '120px'
-  const firstColMinWidth = breakpoint === 'mobile' ? '140px' : breakpoint === 'tablet' ? '160px' : 'auto'
+
+  const firstColPx = FIRST_COL_PX[breakpoint]
+  const firstColMinWidth = `${firstColPx}px`
+  // Ancho interior disponible para el contenido: box-sizing es border-box (index.css),
+  // así que el minWidth del th incluye el padding y hay que descontarlo.
+  const firstColContentWidth = `${firstColPx - CELL_PADDING_X[breakpoint] * 2}px`
 
   const cellStyle: React.CSSProperties = {
     padding: cellPadding,
@@ -132,6 +158,9 @@ export function BreakdownTable({
     fontSize: cellFontSize,
     color: '#e8eaed',
     transition: 'background-color 150ms ease',
+    // Las filas tienen altura variable (el nombre envuelve): los montos se alinean
+    // con la primera línea del nombre en vez de centrarse contra el bloque.
+    verticalAlign: 'top',
   }
 
   const rightCell: React.CSSProperties = { ...cellStyle, textAlign: 'right' }
@@ -139,19 +168,28 @@ export function BreakdownTable({
   const headerCellStyle: React.CSSProperties = {
     padding: cellPadding,
     fontSize: headerFontSize,
-    backgroundColor: '#1e1e1e',
-    borderBottom: '1px solid #3c4043',
+    backgroundColor: SURFACE,
+    borderBottom: `1px solid ${BORDER}`,
   }
 
-  const stickyFirstCol: React.CSSProperties = isMobileOrTablet
-    ? { position: 'sticky', left: 0, zIndex: 1, backgroundColor: '#1e1e1e' }
-    : {}
+  // La regla inset de 1px marca el límite de la columna congelada siempre; se pinta dentro
+  // de la celda, así que no la afecta borderCollapse. La elevación aparece solo cuando hay
+  // contenido pasando por debajo (scrollLeft > 0).
+  const stickyFirstCol: React.CSSProperties = {
+    position: 'sticky',
+    left: 0,
+    zIndex: Z_STICKY_COL,
+    backgroundColor: `var(--row-bg, ${SURFACE})`,
+    boxShadow: isScrolled
+      ? `inset -1px 0 0 ${BORDER}, 6px 0 8px -4px rgba(0,0,0,0.5)`
+      : `inset -1px 0 0 ${BORDER}`,
+  }
 
   return (
     <div
       style={{
-        backgroundColor: '#1e1e1e',
-        border: '1px solid #3c4043',
+        backgroundColor: SURFACE,
+        border: `1px solid ${BORDER}`,
         borderRadius: '8px',
         overflow: 'hidden',
       }}
@@ -163,7 +201,7 @@ export function BreakdownTable({
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '16px 20px',
-          borderBottom: '1px solid #3c4043',
+          borderBottom: `1px solid ${BORDER}`,
         }}
       >
         <span
@@ -215,8 +253,12 @@ export function BreakdownTable({
           No data available for the selected filters.
         </div>
       ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: periods.length > 3 ? `${300 + (periods.length + 1) * parseInt(minColWidth)}px` : undefined }}>
+        <div
+          data-testid="breakdown-scroll"
+          style={{ overflowX: 'auto' }}
+          onScroll={(e) => setIsScrolled(e.currentTarget.scrollLeft > 0)}
+        >
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: periods.length > 3 ? `${firstColPx + (periods.length + 2) * parseInt(minColWidth)}px` : undefined }}>
             <thead>
               <tr>
                 <th style={{ ...headerCellStyle, textAlign: 'left', minWidth: firstColMinWidth, ...stickyFirstCol }}>
@@ -261,14 +303,20 @@ export function BreakdownTable({
                       borderBottom: '1px solid #2d2d2d',
                     }}
                     onMouseEnter={(e) => {
-                      ;(e.currentTarget as HTMLTableRowElement).style.backgroundColor = '#2d2d2d'
+                      // --row-bg hereda por DOM hasta la celda sticky, que es opaca y de otro
+                      // modo taparía el fondo del <tr>. Cero re-render de React.
+                      const tr = e.currentTarget as HTMLTableRowElement
+                      tr.style.backgroundColor = SURFACE_HOVER
+                      tr.style.setProperty('--row-bg', SURFACE_HOVER)
                     }}
                     onMouseLeave={(e) => {
-                      ;(e.currentTarget as HTMLTableRowElement).style.backgroundColor = ''
+                      const tr = e.currentTarget as HTMLTableRowElement
+                      tr.style.backgroundColor = ''
+                      tr.style.removeProperty('--row-bg')
                     }}
                   >
                     <td style={{ ...cellStyle, ...stickyFirstCol }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', maxWidth: firstColContentWidth }}>
                         <span
                           style={{
                             width: '12px',
@@ -276,9 +324,10 @@ export function BreakdownTable({
                             borderRadius: '50%',
                             backgroundColor: row.color,
                             flexShrink: 0,
+                            marginTop: '3px',
                           }}
                         />
-                        <span style={{ fontWeight: 500 }}>{row.name}</span>
+                        <span style={{ fontWeight: 500, minWidth: 0, overflowWrap: 'anywhere' }}>{row.name}</span>
                       </div>
                     </td>
                     {periods.map((period) => (
@@ -299,11 +348,12 @@ export function BreakdownTable({
             <tfoot>
               <tr
                 style={{
-                  backgroundColor: 'rgba(18,18,18,0.3)',
-                  borderTop: '1px solid #3c4043',
+                  backgroundColor: SURFACE_FOOTER,
+                  borderTop: `1px solid ${BORDER}`,
                 }}
               >
-                <td style={{ ...cellStyle, fontWeight: 500, fontSize: '16px', ...stickyFirstCol }}>
+                {/* backgroundColor va después del spread para ganarle al var(--row-bg, …) */}
+                <td style={{ ...cellStyle, fontWeight: 500, fontSize: '16px', ...stickyFirstCol, backgroundColor: SURFACE_FOOTER }}>
                   Total
                 </td>
                 {periods.map((period) => (

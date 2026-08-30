@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { BreakdownTable } from '../BreakdownTable'
 import { useBreakpoint } from '../../../hooks/useBreakpoint'
@@ -199,5 +199,234 @@ describe('BreakdownTable — mobile', () => {
     const exportBtn = screen.getByRole('button', { name: 'Export CSV' })
     expect(exportBtn.querySelector('svg')).toBeTruthy()
     expect(exportBtn).not.toHaveTextContent('Export CSV')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Sticky first column (spec-sticky-first-column.md)
+// ---------------------------------------------------------------------------
+
+const BREAKPOINTS = ['desktop', 'tablet', 'mobile'] as const
+const GROUP_BYS = ['category', 'budget', 'tag', 'expense_account', 'asset_account'] as const
+
+// Techo del contenido de la 1a columna: FIRST_COL_PX - 2 * CELL_PADDING_X
+const FIRST_COL_CONTENT: Record<(typeof BREAKPOINTS)[number], string> = {
+  desktop: '188px', // 220 - 2*16
+  tablet: '132px',  // 160 - 2*14
+  mobile: '120px',  // 140 - 2*10
+}
+
+const LONG_NAME = 'Supermercado y Compras del Hogar Mensuales Recurrentes de la Familia'
+const LONG_NAME_NOSPACE = 'https://facturacion.proveedor-electricidad.example.com/id'
+
+function setBreakpoint(bp: (typeof BREAKPOINTS)[number]) {
+  vi.mocked(useBreakpoint).mockReturnValue(bp)
+}
+
+/** Partes de la primera celda de datos: td > div > [dot, name] */
+function firstColParts() {
+  const td = screen.getAllByRole('cell')[0]
+  const inner = td.firstElementChild as HTMLElement
+  return {
+    td,
+    inner,
+    dot: inner.children[0] as HTMLElement,
+    name: inner.children[1] as HTMLElement,
+  }
+}
+
+describe('BreakdownTable — sticky first column', () => {
+  it.each(BREAKPOINTS)('first column header is sticky on %s', (bp) => {
+    setBreakpoint(bp)
+    render(<BreakdownTable {...defaultProps} />)
+    const th = screen.getAllByRole('columnheader')[0]
+    expect(th).toHaveStyle({ position: 'sticky', left: '0px', zIndex: '2' })
+  })
+
+  it.each(BREAKPOINTS)('first data cell is sticky on %s', (bp) => {
+    setBreakpoint(bp)
+    render(<BreakdownTable {...defaultProps} />)
+    const { td } = firstColParts()
+    expect(td).toHaveStyle({ position: 'sticky', left: '0px' })
+  })
+
+  it.each(BREAKPOINTS)('footer first cell is sticky on %s', (bp) => {
+    setBreakpoint(bp)
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    const footerCell = container.querySelector('tfoot td') as HTMLElement
+    expect(footerCell).toHaveStyle({ position: 'sticky' })
+  })
+
+  it.each(BREAKPOINTS)('period cells are NOT sticky on %s (regression guard)', (bp) => {
+    setBreakpoint(bp)
+    render(<BreakdownTable {...defaultProps} />)
+    const periodCell = screen.getAllByRole('cell')[1]
+    expect(periodCell.style.position).not.toBe('sticky')
+  })
+})
+
+describe('BreakdownTable — desktop', () => {
+  beforeEach(() => {
+    setBreakpoint('desktop')
+  })
+
+  it('keeps the first column sticky on desktop', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    expect(screen.getAllByRole('columnheader')[0]).toHaveStyle({ position: 'sticky' })
+    expect(firstColParts().td).toHaveStyle({ position: 'sticky' })
+  })
+
+  it('gives the first column header a minWidth of 220px', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    expect(screen.getAllByRole('columnheader')[0]).toHaveStyle({ minWidth: '220px' })
+  })
+
+  it('table minWidth uses the first column width and counts periods + Average + Total', () => {
+    const fourPeriods = ['Jan 2026', 'Feb 2026', 'Mar 2026', 'Apr 2026']
+    const { container } = render(<BreakdownTable {...defaultProps} periods={fourPeriods} />)
+    // 220 + (4 + 2) * 120 = 940
+    expect(container.querySelector('table')).toHaveStyle({ minWidth: '940px' })
+  })
+})
+
+describe('BreakdownTable — wrap de la primera columna', () => {
+  beforeEach(() => {
+    setBreakpoint('desktop')
+  })
+
+  it.each(BREAKPOINTS)('caps the first column content width on %s', (bp) => {
+    setBreakpoint(bp)
+    render(<BreakdownTable {...defaultProps} />)
+    expect(firstColParts().inner).toHaveStyle({ maxWidth: FIRST_COL_CONTENT[bp] })
+  })
+
+  it('uses overflowWrap anywhere so unbroken strings do not widen the frozen column', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    expect(firstColParts().name).toHaveStyle({ overflowWrap: 'anywhere' })
+  })
+
+  it('never truncates the name (no ellipsis, no nowrap, no overflow hidden, no title)', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const { td, name } = firstColParts()
+    expect(name.style.textOverflow).toBe('')
+    expect(name.style.whiteSpace).toBe('')
+    expect(name.style.overflow).toBe('')
+    expect(td).not.toHaveAttribute('title')
+  })
+
+  it('renders a long name with spaces in full', () => {
+    const longRows: BreakdownRow[] = [
+      { id: '1', name: LONG_NAME, color: '#4285f4', values: {}, average: 0, total: 0 },
+    ]
+    render(<BreakdownTable {...defaultProps} rows={longRows} />)
+    expect(screen.getByText(LONG_NAME)).toBeInTheDocument()
+  })
+
+  it('renders a long name without spaces in full', () => {
+    const longRows: BreakdownRow[] = [
+      { id: '1', name: LONG_NAME_NOSPACE, color: '#4285f4', values: {}, average: 0, total: 0 },
+    ]
+    render(<BreakdownTable {...defaultProps} rows={longRows} />)
+    expect(screen.getByText(LONG_NAME_NOSPACE)).toBeInTheDocument()
+  })
+
+  it('aligns data cells to the top but not the header', () => {
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    expect(screen.getAllByRole('cell')[0]).toHaveStyle({ verticalAlign: 'top' })
+    expect(screen.getAllByRole('cell')[1]).toHaveStyle({ verticalAlign: 'top' })
+    expect(container.querySelector('tfoot td')).toHaveStyle({ verticalAlign: 'top' })
+    expect(screen.getAllByRole('columnheader')[0].style.verticalAlign).toBe('')
+  })
+
+  it('aligns the color dot with the first line of the name', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const { inner, dot } = firstColParts()
+    expect(inner).toHaveStyle({ alignItems: 'flex-start' })
+    expect(dot).toHaveStyle({ marginTop: '3px' })
+  })
+})
+
+describe('BreakdownTable — row hover reaches the sticky cell', () => {
+  beforeEach(() => {
+    setBreakpoint('desktop')
+  })
+
+  it('sets --row-bg and the row background on hover', async () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const row = screen.getAllByRole('row')[1]
+    await userEvent.hover(row)
+    expect(row.style.getPropertyValue('--row-bg')).toBe('#2d2d2d')
+    expect(row.style.backgroundColor).toBe('rgb(45, 45, 45)')
+  })
+
+  it('clears --row-bg and the row background on unhover', async () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const row = screen.getAllByRole('row')[1]
+    await userEvent.hover(row)
+    await userEvent.unhover(row)
+    expect(row.style.getPropertyValue('--row-bg')).toBe('')
+    expect(row.style.backgroundColor).toBe('')
+  })
+
+  it('sticky cell background follows --row-bg', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    expect(firstColParts().td.style.backgroundColor).toBe('var(--row-bg, #1e1e1e)')
+  })
+})
+
+describe('BreakdownTable — footer tint', () => {
+  beforeEach(() => {
+    setBreakpoint('desktop')
+  })
+
+  it('paints the footer sticky cell with the same opaque tint as its row', () => {
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    const footerRow = container.querySelector('tfoot tr') as HTMLElement
+    const footerCell = container.querySelector('tfoot td') as HTMLElement
+    expect(footerRow.style.backgroundColor).toBe('rgb(26, 26, 26)')
+    expect(footerCell.style.backgroundColor).toBe('rgb(26, 26, 26)')
+  })
+})
+
+describe('BreakdownTable — scroll separator', () => {
+  beforeEach(() => {
+    setBreakpoint('desktop')
+  })
+
+  it('shows only the 1px inset rule while not scrolled', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    expect(firstColParts().td.style.boxShadow).toBe('inset -1px 0 0 #3c4043')
+  })
+
+  it('adds the elevation shadow once scrollLeft > 0', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const wrapper = screen.getByTestId('breakdown-scroll')
+    Object.defineProperty(wrapper, 'scrollLeft', { value: 120, writable: true, configurable: true })
+    fireEvent.scroll(wrapper)
+    expect(firstColParts().td.style.boxShadow).toContain('rgba(0,0,0,0.5)')
+  })
+
+  it('drops the elevation shadow when scrolled back to 0', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const wrapper = screen.getByTestId('breakdown-scroll')
+    Object.defineProperty(wrapper, 'scrollLeft', { value: 120, writable: true, configurable: true })
+    fireEvent.scroll(wrapper)
+    expect(firstColParts().td.style.boxShadow).toContain('rgba(0,0,0,0.5)')
+
+    Object.defineProperty(wrapper, 'scrollLeft', { value: 0, writable: true, configurable: true })
+    fireEvent.scroll(wrapper)
+    expect(firstColParts().td.style.boxShadow).toBe('inset -1px 0 0 #3c4043')
+  })
+})
+
+describe('BreakdownTable — sticky across groupBy variants', () => {
+  beforeEach(() => {
+    setBreakpoint('desktop')
+  })
+
+  it.each(GROUP_BYS)('first column is sticky for groupBy=%s', (groupBy) => {
+    render(<BreakdownTable {...defaultProps} groupBy={groupBy} />)
+    expect(screen.getAllByRole('columnheader')[0]).toHaveStyle({ position: 'sticky' })
+    expect(firstColParts().td).toHaveStyle({ position: 'sticky' })
   })
 })
