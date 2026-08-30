@@ -676,7 +676,7 @@ describe('BreakdownTable — ciclo de vida del header fijado', () => {
     }).not.toThrow()
   })
 
-  it('reinstala el efecto al volver del skeleton sin dejar el observer anterior colgado', async () => {
+  it('reinstala el efecto al volver del skeleton', async () => {
     const { rerender, container } = render(<BreakdownTable {...defaultProps} isLoading={true} />)
     expect(container.querySelector('table')).toBeNull()
 
@@ -687,5 +687,126 @@ describe('BreakdownTable — ciclo de vida del header fijado', () => {
     fireEvent.scroll(window)
     await act(() => new Promise<void>((r) => requestAnimationFrame(() => r())))
     expect(thead.style.transform).toBe('')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Tests 29-33 (spec §10.4): el cableado del efecto, con las métricas stubeadas.
+//
+// jsdom no hace layout y devuelve ceros, pero se stubean sin problema — y sin esto ninguno de
+// los tres tests de arriba puede fallar: pasan igual si el efecto no se ejecutara nunca.
+// ---------------------------------------------------------------------------
+
+const TABLE_H = 992
+const THEAD_H = 43
+const TFOOT_H = 49
+/** Tope del clamp: 992 - 43 - 49. */
+const MAX_OFFSET = TABLE_H - THEAD_H - TFOOT_H
+
+function setHeight(el: Element, value: number) {
+  Object.defineProperty(el, 'offsetHeight', { value, configurable: true })
+}
+
+/** Coloca el top de la tabla respecto al viewport. Negativo = ya pasó el top. */
+function setTableTop(table: Element, top: number) {
+  vi.spyOn(table, 'getBoundingClientRect').mockReturnValue({
+    top, bottom: top + TABLE_H, left: 0, right: 0, width: 0, height: TABLE_H,
+    x: 0, y: top, toJSON: () => ({}),
+  } as DOMRect)
+}
+
+/** Dispara un ciclo de sync y espera al frame que lo ejecuta (el efecto coalesce por rAF). */
+async function tick() {
+  fireEvent.scroll(window)
+  await act(() => new Promise<void>((r) => requestAnimationFrame(() => r())))
+}
+
+/** Monta la tabla con las métricas stubeadas y devuelve los nodos. */
+function renderWithMetrics() {
+  const utils = render(<BreakdownTable {...defaultProps} />)
+  const table = utils.container.querySelector('table') as HTMLElement
+  const thead = utils.container.querySelector('thead') as HTMLElement
+  setHeight(table, TABLE_H)
+  setHeight(thead, THEAD_H)
+  setHeight(utils.container.querySelector('tfoot') as HTMLElement, TFOOT_H)
+  return { ...utils, table, thead }
+}
+
+describe('BreakdownTable — el efecto fija el header (métricas stubeadas)', () => {
+  beforeEach(() => {
+    setBreakpoint('desktop')
+  })
+
+  it('fija el header cuando la tabla pasa el top del viewport', async () => {
+    const { table, thead } = renderWithMetrics()
+    setTableTop(table, -300)
+    await tick()
+    expect(thead.style.transform).toBe('translateY(300px)')
+  })
+
+  it('limpia el transform al volver la tabla por debajo del top', async () => {
+    const { table, thead } = renderWithMetrics()
+    setTableTop(table, -300)
+    await tick()
+    expect(thead.style.transform).toBe('translateY(300px)')
+
+    // Es el camino que protege el guard `lastOffset === 0` del fast path: sin él se sale antes
+    // de limpiar y el header se queda pegado.
+    setTableTop(table, 50)
+    await tick()
+    expect(thead.style.transform).toBe('')
+  })
+
+  it('clampea el offset para no tapar la fila de totales', async () => {
+    const { table, thead } = renderWithMetrics()
+    setTableTop(table, -100000)
+    await tick()
+    expect(thead.style.transform).toBe(`translateY(${MAX_OFFSET}px)`)
+  })
+})
+
+describe('BreakdownTable — el efecto se desmonta limpio', () => {
+  beforeEach(() => {
+    setBreakpoint('desktop')
+  })
+
+  it('quita del window los mismos listeners que puso', () => {
+    const add = vi.spyOn(window, 'addEventListener')
+    const remove = vi.spyOn(window, 'removeEventListener')
+    try {
+      const { unmount } = render(<BreakdownTable {...defaultProps} />)
+      const added = add.mock.calls.filter(([e]) => e === 'scroll' || e === 'resize')
+      unmount()
+      const removed = remove.mock.calls.filter(([e]) => e === 'scroll' || e === 'resize')
+
+      expect(added.map(([e]) => e).sort()).toEqual(['resize', 'scroll'])
+      expect(removed.map(([e]) => e).sort()).toEqual(['resize', 'scroll'])
+      // mismo handler en ambos lados: quitar uno distinto no desregistra nada
+      expect(removed.map(([, fn]) => fn)).toEqual(added.map(([, fn]) => fn))
+    } finally {
+      add.mockRestore()
+      remove.mockRestore()
+    }
+  })
+
+  it('desconecta el ResizeObserver, que observa la tabla y el body', () => {
+    const RO = window.ResizeObserver
+    const observe = vi.spyOn(RO.prototype, 'observe')
+    const disconnect = vi.spyOn(RO.prototype, 'disconnect')
+    try {
+      const { container, unmount } = render(<BreakdownTable {...defaultProps} />)
+      const table = container.querySelector('table')
+
+      // El body no es opcional: cubre los cambios de altura POR ENCIMA de la tabla, que no la
+      // redimensionan y por tanto no disparan ni scroll, ni resize, ni el observer de la tabla.
+      expect(observe.mock.calls.map(([el]) => el)).toEqual([table, document.body])
+      expect(disconnect).not.toHaveBeenCalled()
+
+      unmount()
+      expect(disconnect).toHaveBeenCalledTimes(1)
+    } finally {
+      observe.mockRestore()
+      disconnect.mockRestore()
+    }
   })
 })
