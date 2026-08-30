@@ -600,6 +600,15 @@ describe('BreakdownTable — sticky header row', () => {
     expect(corner.style.boxShadow).toContain(COL_EDGE)
   })
 
+  // Simétrico del anterior. Sin este assert, dejar la elevación permanente en stickyCorner no
+  // rompe ningún test: los de elevación de la fase anterior miran la celda del tbody.
+  it('no pinta elevación en la esquina mientras no hay scroll horizontal', () => {
+    const { container } = render(<BreakdownTable {...defaultProps} />)
+    const { corner } = stickyParts(container)
+    expect(corner.style.boxShadow).toBe(`${HEADER_EDGE}, ${COL_EDGE}`)
+    expect(corner.style.boxShadow).not.toContain('rgba(0,0,0,0.5)')
+  })
+
   it('añade la elevación a la esquina sin perder las dos insets', () => {
     const { container } = render(<BreakdownTable {...defaultProps} />)
     const wrapper = screen.getByTestId('breakdown-scroll')

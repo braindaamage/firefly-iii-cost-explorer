@@ -34,8 +34,14 @@ const Z_STICKY_CORNER = 4
 // string concatenado a mano en tres sitios.
 // HEADER_EDGE sustituye al borderBottom del header: con borderCollapse:'collapse' el borde
 // pertenece a la rejilla de la tabla, se pinta en coordenadas de tabla y NO viaja con el
-// <thead> desplazado (el header quedaría sin línea y aparecería una línea huérfana en medio
-// del tbody). La sombra inset sí forma parte del pintado de la propia celda.
+// <thead> desplazado, así que el header fijado se quedaría SIN línea inferior. La sombra inset
+// sí forma parte del pintado de la propia celda y se desplaza con ella.
+//
+// El borde abandonado no llega a verse en ningún caso, por tres razones (medido; no busques
+// una "línea huérfana" en el tbody, no existe): queda en `theadHeight - offset`, o sea siempre
+// por encima de ~42px; mientras cae dentro del viewport lo tapa el propio <thead>, que es
+// stacking context en z-index 3 con celdas de fondo opaco; y tras este cambio esa arista ya no
+// declara ningún borde colapsado, porque el primer <tr> de tbody nunca tuvo borderTop.
 const HEADER_EDGE = `inset 0 -1px 0 ${BORDER}`
 const COL_EDGE = `inset -1px 0 0 ${BORDER}`
 const COL_ELEVATION = '6px 0 8px -4px rgba(0,0,0,0.5)'
@@ -152,7 +158,10 @@ export function BreakdownTable({
 
     let rafId: number | null = null
     // -1 no es un offset posible: fuerza la primera escritura tras (re)montar, porque el nodo
-    // puede ser nuevo (sin transform) o el mismo (con un transform viejo ya inválido).
+    // puede ser nuevo (sin transform) o el mismo con un transform viejo ya inválido. El segundo
+    // caso ocurre de verdad: en desarrollo bajo StrictMode (main.tsx:7) React corre
+    // setup -> cleanup -> setup sin recrear el DOM, así que el efecto se reinstala sobre el
+    // mismo <thead>, que conserva el transform de la pasada anterior.
     let lastOffset = -1
 
     function sync() {
@@ -194,11 +203,22 @@ export function BreakdownTable({
     // (<main>, un layout con sidebar fija…), habría que escuchar también ahí.
     window.addEventListener('scroll', schedule, { passive: true })
     window.addEventListener('resize', schedule)
-    // El ResizeObserver cubre todos los cambios de geometría (datos nuevos, reordenar con
-    // nombres multilínea, periods, breakpoint, carga tardía de Roboto) sin enumerarlos en un
-    // array de deps que se desactualizaría en la siguiente feature.
+    // El ResizeObserver cubre los cambios de geometría (datos nuevos, reordenar con nombres
+    // multilínea, periods, breakpoint, carga tardía de Roboto) sin enumerarlos en un array de
+    // deps que se desactualizaría en la siguiente feature.
+    //
+    // Observar la tabla NO basta: cubre su tamaño propio, pero no un cambio de POSICIÓN por un
+    // hermano que crece por encima de ella. Ahí la tabla no cambia de tamaño, nadie scrollea y
+    // la ventana no cambia, así que ninguno de los tres disparadores llega y el transform se
+    // queda obsoleto: el header aparece flotando sobre el tbody hasta el siguiente scroll.
+    // Es un caso real — accountsData, netWorth, forecast y currenciesQuery (DashboardPage
+    // :49-63) son queries independientes de dashboardData, alimentan paneles de encima de la
+    // tabla y no controlan su desmontaje: un refetch al recuperar el foco cambia su altura con
+    // la tabla montada. Sin riesgo de bucle: sync solo escribe transform, que no afecta al
+    // layout y por tanto no puede realimentar al observer.
     const ro = new ResizeObserver(schedule)
     if (tableRef.current) ro.observe(tableRef.current)
+    ro.observe(document.body)
 
     return () => {
       window.removeEventListener('scroll', schedule)
