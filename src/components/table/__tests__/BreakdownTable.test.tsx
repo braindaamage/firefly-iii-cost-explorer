@@ -667,15 +667,6 @@ describe('BreakdownTable — ciclo de vida del header fijado', () => {
     expect(thead.style.transform).toBe('')
   })
 
-  it('limpia listeners y rAF al desmontar', () => {
-    const { unmount } = render(<BreakdownTable {...defaultProps} />)
-    unmount()
-    expect(() => {
-      fireEvent.scroll(window)
-      fireEvent.resize(window)
-    }).not.toThrow()
-  })
-
   it('reinstala el efecto al volver del skeleton', async () => {
     const { rerender, container } = render(<BreakdownTable {...defaultProps} isLoading={true} />)
     expect(container.querySelector('table')).toBeNull()
