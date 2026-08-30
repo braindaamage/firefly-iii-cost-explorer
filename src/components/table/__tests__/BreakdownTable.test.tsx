@@ -381,6 +381,15 @@ describe('BreakdownTable — row hover reaches the sticky cell', () => {
     render(<BreakdownTable {...defaultProps} />)
     expect(firstColParts().td.style.backgroundColor).toBe('var(--row-bg, #1e1e1e)')
   })
+
+  // Sin esta transición en el <tr>, la fila cambia de golpe mientras la celda congelada hereda
+  // la de cellStyle y hace fade de 150ms: medido en navegador, ~110ms de desfase en ambos sentidos.
+  it('row transition matches the sticky cell so both fade together', () => {
+    render(<BreakdownTable {...defaultProps} />)
+    const row = screen.getAllByRole('row')[1]
+    expect(row).toHaveStyle({ transition: 'background-color 150ms ease' })
+    expect(firstColParts().td).toHaveStyle({ transition: 'background-color 150ms ease' })
+  })
 })
 
 describe('BreakdownTable — footer tint', () => {
@@ -512,15 +521,10 @@ describe('BreakdownTable — criterio 10: sin minWidth con pocos periodos', () =
     setBreakpoint('desktop')
   })
 
+  // El caso `> 3` ya lo cubre el test de minWidth del bloque desktop, con los mismos 4 periodos.
   it('no fija minWidth en la tabla cuando hay 3 periodos o menos', () => {
     const { container } = render(<BreakdownTable {...defaultProps} />)
     expect(container.querySelector('table')!.style.minWidth).toBe('')
-  })
-
-  it('fija minWidth en cuanto hay más de 3 periodos', () => {
-    const four = ['Jan 2026', 'Feb 2026', 'Mar 2026', 'Apr 2026']
-    const { container } = render(<BreakdownTable {...defaultProps} periods={four} />)
-    expect(container.querySelector('table')!.style.minWidth).toBe('940px')
   })
 })
 
